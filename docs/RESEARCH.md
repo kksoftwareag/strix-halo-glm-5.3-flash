@@ -197,13 +197,17 @@ Folgerungen (Stand 05.09., ohne weiteres Tuning):
 | ohne MTP | 13,0 t/s | – |
 | n2 | 14,3 t/s | 79 % |
 | n3 | 14,8 t/s | 78 % |
-| **n4** | **15,2 t/s** | 82 % |
+| n4 | 15,2 t/s | 82 % |
+| **n5** | **15,5 t/s** | 83 % |
+| n6 | 15,1 t/s | 78 % |
+| n7 | 14,5 t/s | 79 % |
+| n8 | 13,9 t/s | 72 % |
 
-Jede Stufe bringt etwa 3 %, die Akzeptanz bleibt hoch – die Verifikation des längeren Drafts kostet auf der bandbreiten-
-limitierten Hardware kaum etwas. Messrauschen liegt bei etwa 3 %; n4 ist deshalb nur „mindestens so gut wie n3“. Größere
-Tiefen (n5/n6), p_min 0 und Temperatur folgen mit `bench/mtp_sweep.py`.
+Das Optimum liegt bei n4–n5 (+17–19 % gegenüber ohne MTP); ab n6 kostet die Verifikation der verworfenen Draft-Token mehr,
+als die zusätzlichen Treffer bringen, bei n8 sinkt die Akzeptanz auf 72 %. Messrauschen etwa 3 %, n4 und n5 sind damit
+gleichwertig. Offen: p_min 0, Temperatur, ngram-mod (`bench/mtp_sweep.py`).
 
-**Empfehlung nach diesen Messungen**: Preset `unsloth-agent` (unsloth-Engine, UD-IQ2_XXS, MTP n4) für Agenten; `tk-plain`
+**Empfehlung nach diesen Messungen**: Preset `unsloth-agent` (unsloth-Engine, UD-IQ2_XXS, MTP n5) für Agenten; `tk-plain`
 als Fallback; `tk-mtp` erst nach einem Fix des Asserts. Feintuning (p_min, ubatch, `ROCBLAS_USE_HIPBLASLT`) steht aus.
 
 ## Quellen

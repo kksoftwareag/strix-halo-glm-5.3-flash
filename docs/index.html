@@ -16,7 +16,7 @@
 und die Messreihen, sobald sie gelaufen sind.</p>
 
 <div class="cards">
-<div class="card"><h3>Empfohlene Konfiguration</h3><div class="big">unsloth + MTP n4</div><div class="sub">PR #27754, UD-IQ2_XXS, KV q8_0, Draft-Tiefe 4: 15,2 t/s bei 8k Tiefe, 82 % Akzeptanz</div></div>
+<div class="card"><h3>Empfohlene Konfiguration</h3><div class="big">unsloth + MTP n5</div><div class="sub">PR #27754, UD-IQ2_XXS, KV q8_0, Draft-Tiefe 5: 15,5 t/s bei 8k Tiefe, 83 % Akzeptanz; Optimum n4–n5, ab n6 langsamer</div></div>
 <div class="card"><h3>Prefill</h3><div class="big">150 t/s</div><div class="sub">bei jeder Slot-Zahl; ein 8k-Prompt braucht 72 s bis zum ersten Token</div></div>
 <div class="card"><h3>Speicher</h3><div class="big">98–100 GB</div><div class="sub">von 105 GB; 16 GB BIOS-VRAM-Carve-out liegen brach, siehe Speicher</div></div>
 </div>
@@ -49,7 +49,7 @@ cgroups mit Speicherdeckel, damit ein parallel laufender Server nicht verdrängt
 </ol>
 
 <h2>Decode-Geschwindigkeit (ein Stream, 8k Prompt, 512 Token)</h2>
-<div class="bars"><div class="bar"><span class="label">tk (#27773) ohne MTP</span><span class="track"><span class="fill" style="width:64%"></span></span><span class="val">10,1 t/s</span></div><div class="bar"><span class="label">unsloth IQ2_XXS ohne MTP</span><span class="track"><span class="fill" style="width:83%"></span></span><span class="val">13,0 t/s</span></div><div class="bar"><span class="label">unsloth IQ1_M ohne MTP</span><span class="track"><span class="fill" style="width:85%"></span></span><span class="val">13,4 t/s</span></div><div class="bar"><span class="label">unsloth IQ2_XXS + MTP n2</span><span class="track"><span class="fill" style="width:91%"></span></span><span class="val">14,3 t/s</span></div><div class="bar"><span class="label">unsloth IQ2_XXS + MTP n4</span><span class="track"><span class="fill" style="width:97%"></span></span><span class="val">15,2 t/s</span></div><div class="bar"><span class="label">unsloth IQ1_M + MTP</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="val">15,7 t/s</span></div></div>
+<div class="bars"><div class="bar"><span class="label">tk (#27773) ohne MTP</span><span class="track"><span class="fill" style="width:64%"></span></span><span class="val">10,1 t/s</span></div><div class="bar"><span class="label">unsloth IQ2_XXS ohne MTP</span><span class="track"><span class="fill" style="width:83%"></span></span><span class="val">13,0 t/s</span></div><div class="bar"><span class="label">unsloth IQ1_M ohne MTP</span><span class="track"><span class="fill" style="width:85%"></span></span><span class="val">13,4 t/s</span></div><div class="bar"><span class="label">unsloth IQ2_XXS + MTP n2</span><span class="track"><span class="fill" style="width:91%"></span></span><span class="val">14,3 t/s</span></div><div class="bar"><span class="label">unsloth IQ2_XXS + MTP n5</span><span class="track"><span class="fill" style="width:99%"></span></span><span class="val">15,5 t/s</span></div><div class="bar"><span class="label">unsloth IQ1_M + MTP</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="val">15,7 t/s</span></div></div>
 <p class="sub">UD-IQ2_XXS bzw. UD-IQ1_M, KV q8_0, 16k Kontext, reasoning low. Prefill in allen Fällen rund 150 t/s. Alle Zahlen: <a href="benchmarks.html">Messungen</a>.</p>
 
 <h2>Status</h2>

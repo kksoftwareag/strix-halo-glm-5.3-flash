@@ -84,6 +84,30 @@
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | 15,2 | 15,2 | 146,6 | 73,7 s | 4,8 | 82% | 0 | 0 |
 
+**unsloth-UD-IQ2_XXS-mtp-n5-20260905-232300**
+
+| Streams | Σ Decode t/s | je Stream t/s | Prefill je Stream t/s | TTFT | inkl. Prefill t/s | Draft-Akzeptanz | Mix-ups | Fehler |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 15,5 | 15,5 | 147,0 | 73,5 s | 4,8 | 83% | 0 | 0 |
+
+**unsloth-UD-IQ2_XXS-mtp-n6-20260905-232622**
+
+| Streams | Σ Decode t/s | je Stream t/s | Prefill je Stream t/s | TTFT | inkl. Prefill t/s | Draft-Akzeptanz | Mix-ups | Fehler |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 15,1 | 15,1 | 147,5 | 73,2 s | 4,8 | 78% | 0 | 0 |
+
+**unsloth-UD-IQ2_XXS-mtp-n7-20260905-232945**
+
+| Streams | Σ Decode t/s | je Stream t/s | Prefill je Stream t/s | TTFT | inkl. Prefill t/s | Draft-Akzeptanz | Mix-ups | Fehler |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 14,5 | 14,5 | 146,0 | 74,0 s | 4,7 | 79% | 0 | 0 |
+
+**unsloth-UD-IQ2_XXS-mtp-n8-20260905-233310**
+
+| Streams | Σ Decode t/s | je Stream t/s | Prefill je Stream t/s | TTFT | inkl. Prefill t/s | Draft-Akzeptanz | Mix-ups | Fehler |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 13,9 | 13,9 | 146,6 | 73,7 s | 4,6 | 72% | 0 | 0 |
+
 **unsloth-UD-IQ2_XXS-nomtp-20260905-230101**
 
 | Streams | Σ Decode t/s | je Stream t/s | Prefill je Stream t/s | TTFT | inkl. Prefill t/s | Draft-Akzeptanz | Mix-ups | Fehler |

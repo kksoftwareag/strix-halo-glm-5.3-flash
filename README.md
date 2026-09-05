@@ -12,7 +12,7 @@ und zu messen. Das Modell ist in llama.cpp noch nicht gemerged; dieses Projekt k
 Alle Entscheidungen, die Recherche mit Quellen und der Messplan stehen in `docs/` (Website) und `docs/RESEARCH.md`.
 
 **Stand 5. September 2026, abends:** Setup steht, erste Messungen liegen vor (Footprint-Probe, Stream-Benchmark mit 1/2/4 Nutzern
-über drei Engines und zwei Quants). Ergebnis in Kürze: unsloth-Engine mit MTP 15,2 t/s (UD-IQ2_XXS, Draft-Tiefe 4) bzw. 15,7 t/s (UD-IQ1_M) bei
+über drei Engines und zwei Quants). Ergebnis in Kürze: unsloth-Engine mit MTP 15,5 t/s (UD-IQ2_XXS, Draft-Tiefe 5; Optimum n4–n5) bzw. 15,7 t/s (UD-IQ1_M) bei
 8k Prompt-Tiefe, Prefill 150 t/s, mehrere Streams erhöhen den Durchsatz nicht; der MTP-PR #27917 stürzt ab etwa 2k Token Kontext ab.
 Details: `docs/benchmarks.html`, `docs/RESEARCH.md` Abschnitt 8. Offene Messungen: `bench/README.md`.
 
