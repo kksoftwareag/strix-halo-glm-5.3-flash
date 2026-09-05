@@ -72,6 +72,8 @@ def main():
     ap.add_argument("--min-avail-gib", type=float, default=8.0)
     ap.add_argument("--budget-gib", type=float, default=None, help="Speicherbudget für die Vorprüfung statt MemAvailable (z.B. 105)")
     ap.add_argument("--batch", type=int, default=None, help="-b (Logical Batch) überschreiben")
+    ap.add_argument("--spec-n", type=int, default=None, help="Draft-Tiefe --spec-draft-n-max (Default aus dem Preset: 2)")
+    ap.add_argument("--spec-p", type=float, default=None, help="--spec-draft-p-min (Default 0.75)")
     ap.add_argument("--ub", type=int, default=None, help="-ub (Physical Batch) überschreiben")
     a = ap.parse_args()
     with socket.socket() as s:
@@ -83,13 +85,17 @@ def main():
                        mtp_enabled=a.mtp, reasoning_effort=a.reasoning, host="127.0.0.1", port=PORT, metrics=False)
     if a.batch:
         cfg = cfg.copy(batch=a.batch)
+    if a.spec_n:
+        cfg = cfg.copy(spec_draft_n_max=a.spec_n)
+    if a.spec_p is not None:
+        cfg = cfg.copy(spec_draft_p_min=a.spec_p)
     if a.ub:
         cfg = cfg.copy(ubatch=a.ub)
     cmd = build_command(cfg, discover_all(), probe(), budget=int(a.budget_gib * 2**30) if a.budget_gib else None)
     if not cmd.ok:
         print("FEHLER:", cmd.errors); sys.exit(1)
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    tag = f"{a.engine}-{a.quant}-{'mtp' if a.mtp else 'nomtp'}-{stamp}"
+    tag = f"{a.engine}-{a.quant}-{('mtp-n' + str(cfg.spec_draft_n_max)) if a.mtp else 'nomtp'}-{stamp}"
     log = (OUT / f"{tag}.log").open("w"); log.write(cmd.shell() + "\n"); log.flush()
     argv = [sys.executable, str(ROOT / "bench/memguard.py"), "--min-avail-gib", str(a.min_avail_gib), "--csv", str(OUT / f"{tag}.csv"), "--"] + cmd.argv
     env = dict(os.environ); env.update(cmd.env)

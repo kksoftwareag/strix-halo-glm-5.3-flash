@@ -74,9 +74,9 @@ class Preset:
 
 
 PRESETS: list[Preset] = [
-    Preset("unsloth-agent", "unsloth #27754, MTP, 128k",
-           "Standard für Agenten (ein Nutzer): unsloth-Engine mit MTP, UD-IQ2_XXS, Draft-Tiefe 2 (14,3 t/s bei 8k Tiefe)",
-           {"engine": "unsloth", "mtp_enabled": True, "spec_draft_n_max": 2}),
+    Preset("unsloth-agent", "unsloth #27754, MTP n4, 128k",
+           "Standard für Agenten (ein Nutzer): unsloth-Engine mit MTP, UD-IQ2_XXS, Draft-Tiefe 4 (15,2 t/s bei 8k Tiefe)",
+           {"engine": "unsloth", "mtp_enabled": True, "spec_draft_n_max": 4}),
     Preset("tkmtp-agent", "timkhronos #27773+#27917, MTP, 128k",
            "ACHTUNG: MTP auf #27917 stürzt ab ~2k Token Kontext ab (Stand 05.09.); nur für kurze Prompts",
            {"engine": "tk-mtp", "mtp_enabled": True, "spec_draft_n_max": 2}),

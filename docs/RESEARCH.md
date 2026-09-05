@@ -190,8 +190,21 @@ Folgerungen (Stand 05.09., ohne weiteres Tuning):
 5. **Speicher**: alle Konfigurationen liegen bei 98–100 GiB Bedarf, es bleiben 5–8 GiB. Die Docker-Container des
    Qualitäts-Benchmarks brauchen zusätzlich Platz – der kleine BIOS-Carve-out ist dafür nötig.
 
-**Empfehlung nach diesen Messungen**: Preset `unsloth-agent` (unsloth-Engine, UD-IQ2_XXS, MTP n2) für Agenten; `tk-plain`
-als Fallback; `tk-mtp` erst nach einem Fix des Asserts. Feintuning (Draft-Tiefe, ubatch, `ROCBLAS_USE_HIPBLASLT`) steht aus.
+**Draft-Tiefe** (unsloth, UD-IQ2_XXS, ein Stream, 8k Prompt, 512 Token, p_min 0,75, 05.09. 23:13):
+
+| Draft-Tiefe | Decode | Akzeptanz |
+| --- | --- | --- |
+| ohne MTP | 13,0 t/s | – |
+| n2 | 14,3 t/s | 79 % |
+| n3 | 14,8 t/s | 78 % |
+| **n4** | **15,2 t/s** | 82 % |
+
+Jede Stufe bringt etwa 3 %, die Akzeptanz bleibt hoch – die Verifikation des längeren Drafts kostet auf der bandbreiten-
+limitierten Hardware kaum etwas. Messrauschen liegt bei etwa 3 %; n4 ist deshalb nur „mindestens so gut wie n3“. Größere
+Tiefen (n5/n6), p_min 0 und Temperatur folgen mit `bench/mtp_sweep.py`.
+
+**Empfehlung nach diesen Messungen**: Preset `unsloth-agent` (unsloth-Engine, UD-IQ2_XXS, MTP n4) für Agenten; `tk-plain`
+als Fallback; `tk-mtp` erst nach einem Fix des Asserts. Feintuning (p_min, ubatch, `ROCBLAS_USE_HIPBLASLT`) steht aus.
 
 ## Quellen
 

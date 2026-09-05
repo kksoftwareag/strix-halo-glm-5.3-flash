@@ -57,13 +57,13 @@ bisher auf die CPU zurück – das ist die wahrscheinliche Ursache für den Einb
 <dt>Offen</dt><dd>Messung bei Tiefe 0/8k/32k (<code>bench/llama_bench.sh</code>). Vulkan als Vergleich, sobald glslc/Header installiert sind.</dd>
 </dl></div>
 
-<div class="decision" id="mtp"><h3>MTP: an (unsloth-Engine), Draft-Tiefe 2</h3><dl>
-<dt>Entscheidung</dt><dd><strong><code>--spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75</code> in den Einzelnutzer-Presets der unsloth-Engine; Mehrnutzer ohne MTP (kein Gewinn, aber auch kein Verlust).</strong></dd>
+<div class="decision" id="mtp"><h3>MTP: an (unsloth-Engine), Draft-Tiefe 4</h3><dl>
+<dt>Entscheidung</dt><dd><strong><code>--spec-type draft-mtp --spec-draft-n-max 4 --spec-draft-p-min 0.75</code> in den Einzelnutzer-Presets der unsloth-Engine; Mehrnutzer ohne MTP (kein Gewinn, aber auch kein Verlust).</strong></dd>
 <dt>Begründung</dt><dd>Akzeptanz je Position 0,92/0,81/0,60/0,44/0,35 (PR #27917) – ab Position 3 lohnt der Draft kaum. unsloth nennt n = 2 als
 Optimum. Auf 4×Ampere mit allem im VRAM war MTP langsamer als ohne; Strix Halo ist bandbreitenlimitiert, dort hat MTP beim
 Qwen-Modell 21 → 35 t/s gebracht.</dd>
 <dt>Beleg</dt><dd>PR #27917, borakilo-Messung, unsloth-Doku; Qwen-Projekt (gleiche Maschine).</dd>
-<dt>Gemessen</dt><dd>unsloth, UD-IQ1_M, 8k Prompt: 13,4 → 15,7 t/s (+17 %), Akzeptanz 82–84 % bei 1–4 Streams. Weniger als bei Qwen3.8 (+70 %), weil der Draft-Head nur 2,6 Token je Runde beisteuert und der Aufwand je Token nicht nur aus dem Gewichte-Lesen besteht.</dd>
+<dt>Gemessen</dt><dd>unsloth, UD-IQ2_XXS, 8k Prompt: ohne MTP 13,0, n2 14,3, n3 14,8, n4 15,2 t/s (Akzeptanz 79–82 %); UD-IQ1_M n2: 13,4 → 15,7 t/s, Akzeptanz 82–84 % bei 1–4 Streams. Weniger als bei Qwen3.8 (+70 %), weil der Draft-Head nur 2,6 Token je Runde beisteuert und der Aufwand je Token nicht nur aus dem Gewichte-Lesen besteht.</dd>
 <dt>Offen</dt><dd><code>bench/mtp_sweep.py</code>: n 1–4, p_min, Temperatur, ngram-mod.</dd>
 </dl></div>
 
