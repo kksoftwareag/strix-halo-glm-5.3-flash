@@ -10,7 +10,7 @@ set -uo pipefail
 cd "$(dirname "$0")/../.."
 QUANTS=("$@")
 [ ${#QUANTS[@]} -eq 0 ] && QUANTS=(UD-IQ2_XXS)
-PRESET="${TB_PRESET:-tkmtp-agent}"
+PRESET="${TB_PRESET:-unsloth-agent}"
 TIMEOUT="${TB_AGENT_TIMEOUT:-3600}"
 EFFORT="${TB_EFFORT:-high}"             # low | high | max
 CTX="${TB_CTX:-131072}"

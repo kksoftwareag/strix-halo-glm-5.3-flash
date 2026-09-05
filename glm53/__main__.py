@@ -36,7 +36,7 @@ OVERRIDES = {
 
 
 def add_overrides(ap: argparse.ArgumentParser) -> None:
-    ap.add_argument("--preset", default="tkmtp-agent")
+    ap.add_argument("--preset", default="unsloth-agent")
     ap.add_argument("--profile", default="", help="gespeichertes Profil statt Preset (state/profiles)")
     for k, spec in OVERRIDES.items():
         typ = spec[1] if isinstance(spec, tuple) else spec

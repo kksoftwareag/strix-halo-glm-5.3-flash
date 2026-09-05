@@ -33,11 +33,13 @@ ubatch 512/1024/2048; KV q8_0 (f16 als Kontrolle). Erwartung: Decode konstant ü
 <tr><td colspan="7" class="empty">noch keine Messung</td></tr>
 </table></div>
 
-<h2 id="footprint">Sweep 0: Speicherbedarf und erste Anfrage – <span class="warn">ausstehend</span></h2>
-<p><code>bench/mem_probe.py</code> je Preset: Ladezeit, Puffergrößen aus dem Log, MemAvailable-Delta, pp/tg, Draft-Akzeptanz. Kalibriert das
-Speichermodell in <code>glm53/memory.py</code>.</p>
+<h2 id="footprint">Sweep 0: Speicherbedarf und erste Anfrage – <span class="ok">erste Probe gemessen</span></h2>
+<p><code>bench/mem_probe.py</code> je Preset: Ladezeit, MemAvailable-Delta, pp/tg, Draft-Akzeptanz. Erste Probe am 5. September: das Modell
+lädt in 77 s, MTP läuft ohne separates Draft-GGUF mit 87 % Akzeptanz (mittlere Draft-Länge 2,6), der Graph wird wiederverwendet,
+und die Speicherschätzung liegt 0,5 GiB neben dem Messwert. Nach dem Laden bleiben bei 32k Kontext nur 5,2 GiB frei.</p>
 <div class="tablewrap"><table>
 <tr><th>Engine</th><th>Quant</th><th>MTP</th><th>Kontext</th><th class="num">Ladezeit</th><th class="num">Decode</th><th class="num">Akzeptanz</th><th class="num">Bedarf (Δ MemAvailable)</th><th class="num">geschätzt</th></tr>
+<tr><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>n2</td><td>32k</td><td class="num">77 s</td><td class="num"><strong>17,3 t/s</strong></td><td class="num">87 %</td><td class="num"><strong>99,9 GiB</strong></td><td class="num">99,4 GiB</td></tr>
 <tr><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>n2</td><td>131k</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">100,0 GiB</td></tr>
 <tr><td>unsloth</td><td>UD-IQ2_XXS</td><td>n2</td><td>131k</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">100,0 GiB</td></tr>
 <tr><td>tk</td><td>UD-IQ2_XXS</td><td>–</td><td>131k</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">96,6 GiB</td></tr>
@@ -53,14 +55,80 @@ dieser Maschine: 21 → 35 t/s.</p>
 <tr><td colspan="6" class="empty">noch keine Messung</td></tr>
 </table></div>
 
-<h2 id="multiuser">Sweep 3: Mehrnutzer – <span class="warn">ausstehend</span></h2>
-<p><code>bench/multiuser.py</code>: 1/2/4/8 gleichzeitige Anfragen mit 8k Prompt und 512 Token Ausgabe, <code>--kv-unified</code>, Codewort-Prüfung.
-Einmal ohne MTP (tk), einmal mit (tk-mtp).</p>
+<h2 id="multiuser">Sweep 3: Streams – <span class="ok">gemessen am 5. September</span></h2>
+<p><code>bench/multiuser.py</code>: 1/2/4 gleichzeitige Anfragen mit je 8k Prompt (eigener Fülltext je Nutzer) und 512 Token Ausgabe,
+16k Kontext je Slot, <code>--kv-unified</code> ab zwei Slots, reasoning low, Codewort-Prüfung auf vertauschte Slots.
+„Σ Decode“ ist die Summe der Decode-Raten aller Streams; „inkl. Prefill“ zählt die erzeugten Token gegen die gesamte
+Wandzeit einschließlich Prompt-Verarbeitung.</p>
+<!-- STREAMS:BEGIN -->
 <div class="tablewrap"><table>
-<tr><th class="num">Nutzer</th><th class="num">Σ t/s ohne MTP</th><th class="num">je Nutzer</th><th class="num">TTFT</th><th class="num">Σ t/s mit MTP</th><th class="num">Mix-ups</th></tr>
-<tr><td colspan="6" class="empty">noch keine Messung</td></tr>
+<tr><th>Lauf</th><th>Preset</th><th class="num">Ladezeit</th><th class="num">Prefill</th><th class="num">Decode</th><th class="num">Akzeptanz</th><th class="num">Bedarf</th><th class="num">Peak GTT</th><th class="num">geschätzt</th></tr>
+<tr><td>probe-tkmtp-32k</td><td>tkmtp-agent</td><td class="num">79 s</td><td class="num">24,9 t/s</td><td class="num">17,3 t/s</td><td class="num">87%</td><td class="num">99,9 GiB</td><td class="num">97,2 GiB</td><td class="num">99,2 GiB</td></tr>
+</table></div>
+<h3>tk-UD-IQ2_XXS-nomtp-20260905-214917</h3>
+<div class="tablewrap"><table>
+<tr><th class="num">Streams</th><th class="num">Σ Decode t/s</th><th class="num">je Stream</th><th class="num">Prefill je Stream</th><th class="num">TTFT</th><th class="num">inkl. Prefill</th><th class="num">Akzeptanz</th><th class="num">Mix-ups</th><th class="num">Fehler</th></tr>
+<tr><td class="num">1</td><td class="num">10,5</td><td class="num">10,5</td><td class="num">149,7</td><td class="num">72,2 s</td><td class="num">4,2</td><td class="num">–</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="num">2</td><td class="num">11,5</td><td class="num">5,8</td><td class="num">65,8</td><td class="num">162,4 s</td><td class="num">4,1</td><td class="num">–</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="num">4</td><td class="num">9,1</td><td class="num">2,3</td><td class="num">40,2</td><td class="num">311,3 s</td><td class="num">3,5</td><td class="num">–</td><td class="num">0</td><td class="num">0</td></tr>
+</table></div>
+<h3>tk-UD-IQ2_XXS-nomtp-20260905-225036</h3>
+<div class="tablewrap"><table>
+<tr><th class="num">Streams</th><th class="num">Σ Decode t/s</th><th class="num">je Stream</th><th class="num">Prefill je Stream</th><th class="num">TTFT</th><th class="num">inkl. Prefill</th><th class="num">Akzeptanz</th><th class="num">Mix-ups</th><th class="num">Fehler</th></tr>
+<tr><td class="num">1</td><td class="num">10,1</td><td class="num">10,1</td><td class="num">150,7</td><td class="num">71,7 s</td><td class="num">4,2</td><td class="num">–</td><td class="num">0</td><td class="num">0</td></tr>
+</table></div>
+<h3>tk-merged-UD-IQ2_XXS-mtp-20260905-224355</h3>
+<p class="bad">Absturz: GGML_ASSERT(width == mtp_dsa_sel_width)</p>
+<h3>tk-mtp-UD-IQ1_M-mtp-20260905-220638</h3>
+<p class="bad">Absturz: GGML_ASSERT(width == mtp_dsa_sel_width)</p>
+<h3>tk-mtp-UD-IQ1_M-mtp-20260905-221145</h3>
+<p class="bad">Absturz: GGML_ASSERT(width == mtp_dsa_sel_width)</p>
+<h3>tk-mtp-UD-IQ1_M-mtp-20260905-224157</h3>
+<p class="bad">Absturz: GGML_ASSERT(width == mtp_dsa_sel_width)</p>
+<h3>tk-mtp-UD-IQ1_M-mtp-20260905-224623</h3>
+<div class="tablewrap"><table>
+<tr><th class="num">Streams</th><th class="num">Σ Decode t/s</th><th class="num">je Stream</th><th class="num">Prefill je Stream</th><th class="num">TTFT</th><th class="num">inkl. Prefill</th><th class="num">Akzeptanz</th><th class="num">Mix-ups</th><th class="num">Fehler</th></tr>
+<tr><td class="num">1</td><td class="num">16,5</td><td class="num">16,5</td><td class="num">137,7</td><td class="num">6,3 s</td><td class="num">11,8</td><td class="num">74%</td><td class="num">0</td><td class="num">0</td></tr>
+</table></div>
+<h3>tk-mtp-UD-IQ1_M-mtp-20260905-224812</h3>
+<div class="tablewrap"><table>
+<tr><th class="num">Streams</th><th class="num">Σ Decode t/s</th><th class="num">je Stream</th><th class="num">Prefill je Stream</th><th class="num">TTFT</th><th class="num">inkl. Prefill</th><th class="num">Akzeptanz</th><th class="num">Mix-ups</th><th class="num">Fehler</th></tr>
+<tr><td class="num">1</td><td class="num">10,7</td><td class="num">10,7</td><td class="num">152,6</td><td class="num">13,7 s</td><td class="num">6,8</td><td class="num">78%</td><td class="num">0</td><td class="num">0</td></tr>
+</table></div>
+<h3>tk-mtp-UD-IQ1_M-mtp-20260905-225414</h3>
+<p class="bad">Absturz: GGML_ASSERT(width == mtp_dsa_sel_width)</p>
+<h3>tk-mtp-UD-IQ1_M-mtp-20260905-225607</h3>
+<p class="bad">Absturz: GGML_ASSERT(width == mtp_dsa_sel_width)</p>
+<h3>tk-mtp-UD-IQ1_M-mtp-20260905-225805</h3>
+<p class="bad">Absturz: GGML_ASSERT(width == mtp_dsa_sel_width)</p>
+<h3>tk-mtp-UD-IQ2_XXS-mtp-20260905-220938</h3>
+<p class="bad">Absturz: GGML_ASSERT(width == mtp_dsa_sel_width)</p>
+<h3>tk-mtp-UD-IQ2_XXS-mtp-20260905-223310</h3>
+<p class="bad">Absturz: GGML_ASSERT(width == mtp_dsa_sel_width)</p>
+<h3>unsloth-UD-IQ1_M-mtp-20260905-221346</h3>
+<div class="tablewrap"><table>
+<tr><th class="num">Streams</th><th class="num">Σ Decode t/s</th><th class="num">je Stream</th><th class="num">Prefill je Stream</th><th class="num">TTFT</th><th class="num">inkl. Prefill</th><th class="num">Akzeptanz</th><th class="num">Mix-ups</th><th class="num">Fehler</th></tr>
+<tr><td class="num">1</td><td class="num">15,7</td><td class="num">15,7</td><td class="num">143,5</td><td class="num">75,3 s</td><td class="num">4,8</td><td class="num">82%</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="num">2</td><td class="num">15,2</td><td class="num">7,6</td><td class="num">62,4</td><td class="num">171,3 s</td><td class="num">4,3</td><td class="num">83%</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td class="num">4</td><td class="num">9,8</td><td class="num">2,5</td><td class="num">38,1</td><td class="num">329,5 s</td><td class="num">3,5</td><td class="num">84%</td><td class="num">0</td><td class="num">0</td></tr>
+</table></div>
+<h3>unsloth-UD-IQ1_M-nomtp-20260905-223843</h3>
+<div class="tablewrap"><table>
+<tr><th class="num">Streams</th><th class="num">Σ Decode t/s</th><th class="num">je Stream</th><th class="num">Prefill je Stream</th><th class="num">TTFT</th><th class="num">inkl. Prefill</th><th class="num">Akzeptanz</th><th class="num">Mix-ups</th><th class="num">Fehler</th></tr>
+<tr><td class="num">1</td><td class="num">13,4</td><td class="num">13,4</td><td class="num">149,2</td><td class="num">72,4 s</td><td class="num">4,6</td><td class="num">–</td><td class="num">0</td><td class="num">0</td></tr>
+</table></div>
+<h3>unsloth-UD-IQ2_XXS-mtp-20260905-223518</h3>
+<div class="tablewrap"><table>
+<tr><th class="num">Streams</th><th class="num">Σ Decode t/s</th><th class="num">je Stream</th><th class="num">Prefill je Stream</th><th class="num">TTFT</th><th class="num">inkl. Prefill</th><th class="num">Akzeptanz</th><th class="num">Mix-ups</th><th class="num">Fehler</th></tr>
+<tr><td class="num">1</td><td class="num">14,3</td><td class="num">14,3</td><td class="num">146,6</td><td class="num">73,7 s</td><td class="num">4,7</td><td class="num">79%</td><td class="num">0</td><td class="num">0</td></tr>
+</table></div>
+<h3>unsloth-UD-IQ2_XXS-nomtp-20260905-230101</h3>
+<div class="tablewrap"><table>
+<tr><th class="num">Streams</th><th class="num">Σ Decode t/s</th><th class="num">je Stream</th><th class="num">Prefill je Stream</th><th class="num">TTFT</th><th class="num">inkl. Prefill</th><th class="num">Akzeptanz</th><th class="num">Mix-ups</th><th class="num">Fehler</th></tr>
+<tr><td class="num">1</td><td class="num">13,0</td><td class="num">13,0</td><td class="num">151,7</td><td class="num">71,2 s</td><td class="num">4,6</td><td class="num">–</td><td class="num">0</td><td class="num">0</td></tr>
 </table></div>
 
+<!-- STREAMS:END -->
 <h2 id="vision">Vision – <span class="warn">ausstehend</span></h2>
 <p>Preset <code>chat-vision</code> (tk-mtp + AesSedai-mmproj Q8_0): Bildtokenzahl, Ladezeit, Speicher. Community: 1500×500-Logo → 1003 Token,
 2875×1500-Diagramm → 5586 Token (#27773, Projektor auf CPU).</p>

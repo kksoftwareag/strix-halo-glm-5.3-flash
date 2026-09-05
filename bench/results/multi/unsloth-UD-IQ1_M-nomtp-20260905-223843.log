@@ -1,0 +1,70 @@
+/home/lyra/models/strix-halo-glm-5.3-flash/engine/build-unsloth-hip/bin/llama-server -m /home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ1_M.glm5next/GLM-5.3-Flash-UD-IQ1_M-00001-of-00003.gguf -ngl 99 -c 16384 -np 1 -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 -t 8 --load-mode none --cache-ram 512 --jinja --chat-template-kwargs '{"reasoning_effort": "low"}' --temp 1.0 --top-p 0.95 --top-k 0 --min-p 0.0 --host 127.0.0.1 --port 8096 -a glm-5.3-flash --no-webui -lv 3
+0.00.021.273 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.021.389 I srv          init: The UI is disabled
+0.00.021.390 I srv          init: Use --ui/--no-ui (or deprecated --webui/--no-webui) to enable/disable
+0.00.021.466 W srv  llama_server: -----------------
+0.00.021.467 W srv  llama_server: CORS is set to allow all origins ('*') and no API key is set
+0.00.021.467 W srv  llama_server: this can be a security risk (cross-origin attacks)
+0.00.021.468 W srv  llama_server: more info: https://github.com/ggml-org/llama.cpp/pull/25655
+0.00.021.468 W srv  llama_server: -----------------
+0.00.022.727 I srv    load_model: loading model '/home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ1_M.glm5next/GLM-5.3-Flash-UD-IQ1_M-00001-of-00003.gguf'
+0.00.575.519 W load: special_eot_id is not in special_eog_ids - the tokenizer config may be incorrect
+0.00.575.522 W load: special_eom_id is not in special_eog_ids - the tokenizer config may be incorrect
+0.00.600.790 W model has unused tensor blk.45.attn_norm.weight (size = 16384 bytes) -- ignoring
+0.00.600.793 W model has unused tensor blk.45.ffn_norm.weight (size = 16384 bytes) -- ignoring
+0.00.600.795 W model has unused tensor blk.45.attn_q_a.weight (size = 4325376 bytes) -- ignoring
+0.00.600.797 W model has unused tensor blk.45.attn_q_a_norm.weight (size = 6144 bytes) -- ignoring
+0.00.600.798 W model has unused tensor blk.45.attn_q_b.weight (size = 26738688 bytes) -- ignoring
+0.00.600.800 W model has unused tensor blk.45.attn_kv_a_mqa.weight (size = 2228224 bytes) -- ignoring
+0.00.600.801 W model has unused tensor blk.45.attn_kv_a_norm.weight (size = 2048 bytes) -- ignoring
+0.00.600.803 W model has unused tensor blk.45.attn_k_b.weight (size = 8912896 bytes) -- ignoring
+0.00.600.804 W model has unused tensor blk.45.attn_v_b.weight (size = 8912896 bytes) -- ignoring
+0.00.600.805 W model has unused tensor blk.45.attn_output.weight (size = 46137344 bytes) -- ignoring
+0.00.600.808 W model has unused tensor blk.45.indexer.k_norm.weight (size = 512 bytes) -- ignoring
+0.00.600.809 W model has unused tensor blk.45.indexer.k_norm.bias (size = 512 bytes) -- ignoring
+0.00.600.811 W model has unused tensor blk.45.indexer.proj.weight (size = 524288 bytes) -- ignoring
+0.00.600.812 W model has unused tensor blk.45.indexer.attn_k.weight (size = 557056 bytes) -- ignoring
+0.00.600.814 W model has unused tensor blk.45.indexer.attn_q_b.weight (size = 6684672 bytes) -- ignoring
+0.00.600.815 W model has unused tensor blk.45.indexer_compressor_gate.weight (size = 557056 bytes) -- ignoring
+0.00.600.817 W model has unused tensor blk.45.indexer_compressor_ape.weight (size = 2048 bytes) -- ignoring
+0.00.600.819 W model has unused tensor blk.45.ffn_gate_inp.weight (size = 4718592 bytes) -- ignoring
+0.00.600.820 W model has unused tensor blk.45.exp_probs_b.bias (size = 1152 bytes) -- ignoring
+0.00.600.821 W model has unused tensor blk.45.ffn_gate_exps.weight (size = 792723456 bytes) -- ignoring
+0.00.600.823 W model has unused tensor blk.45.ffn_up_exps.weight (size = 792723456 bytes) -- ignoring
+0.00.600.825 W model has unused tensor blk.45.ffn_down_exps.weight (size = 1038090240 bytes) -- ignoring
+0.00.600.826 W model has unused tensor blk.45.ffn_gate_shexp.weight (size = 5767168 bytes) -- ignoring
+0.00.600.828 W model has unused tensor blk.45.ffn_up_shexp.weight (size = 5767168 bytes) -- ignoring
+0.00.600.829 W model has unused tensor blk.45.ffn_down_shexp.weight (size = 6881280 bytes) -- ignoring
+0.00.600.831 W model has unused tensor blk.45.nextn.eh_proj.weight (size = 35651584 bytes) -- ignoring
+0.00.600.832 W model has unused tensor blk.45.nextn.enorm.weight (size = 16384 bytes) -- ignoring
+0.00.600.834 W model has unused tensor blk.45.nextn.hnorm.weight (size = 16384 bytes) -- ignoring
+0.00.600.836 W model has unused tensor blk.45.nextn.shared_head_norm.weight (size = 16384 bytes) -- ignoring
+1.07.523.227 W create_memory: indexer key cache stays f16 rather than q8_0: it also holds the compressor gates
+1.07.686.857 I cmn          init: llama threadpool init, n_threads = 8
+1.07.942.484 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 16384, kv_unified = 'false'
+1.07.957.543 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+1.07.957.593 I srv  llama_server: model loaded
+1.07.957.597 I srv  llama_server: listening on http://127.0.0.1:8096
+1.08.011.886 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+1.08.012.448 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+1.33.136.187 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   4105, progress = 0.38, t =  25.12 s / 163.39 tokens per second
+2.00.262.798 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   8201, progress = 0.76, t =  52.25 s / 156.96 tokens per second
+2.12.080.593 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   9773, progress = 0.90, t =  64.07 s / 152.54 tokens per second
+2.19.695.634 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =  10797, progress = 1.00, t =  71.68 s / 150.62 tokens per second
+2.27.788.643 I slot print_timing: id  0 | task 0 | n_gen =    100, tg =  13.44 t/s, tg_3s =  13.57 t/s
+2.30.827.094 I slot print_timing: id  0 | task 0 | n_gen =    141, tg =  13.45 t/s, tg_3s =  13.49 t/s
+2.33.866.363 I slot print_timing: id  0 | task 0 | n_gen =    182, tg =  13.46 t/s, tg_3s =  13.49 t/s
+2.36.923.894 I slot print_timing: id  0 | task 0 | n_gen =    223, tg =  13.45 t/s, tg_3s =  13.41 t/s
+2.39.972.920 I slot print_timing: id  0 | task 0 | n_gen =    264, tg =  13.45 t/s, tg_3s =  13.45 t/s
+2.43.014.022 I slot print_timing: id  0 | task 0 | n_gen =    305, tg =  13.46 t/s, tg_3s =  13.48 t/s
+2.46.055.064 I slot print_timing: id  0 | task 0 | n_gen =    346, tg =  13.46 t/s, tg_3s =  13.48 t/s
+2.49.085.905 I slot print_timing: id  0 | task 0 | n_gen =    386, tg =  13.43 t/s, tg_3s =  13.20 t/s
+2.52.123.977 I slot print_timing: id  0 | task 0 | n_gen =    427, tg =  13.44 t/s, tg_3s =  13.50 t/s
+2.55.181.154 I slot print_timing: id  0 | task 0 | n_gen =    468, tg =  13.43 t/s, tg_3s =  13.41 t/s
+2.58.231.618 I slot print_timing: id  0 | task 0 | n_gen =    509, tg =  13.44 t/s, tg_3s =  13.44 t/s
+2.58.454.136 I slot print_timing: id  0 | task 0 | prompt eval time =   72407.85 ms / 10801 tokens (    6.70 ms per token,   149.17 tokens per second)
+2.58.454.139 I slot print_timing: id  0 | task 0 |        eval time =   38033.82 ms /   512 tokens (   74.43 ms per token,    13.44 tokens per second)
+2.58.454.140 I slot print_timing: id  0 | task 0 |       total time =  110441.66 ms / 11313 tokens
+2.58.454.145 I slot print_timing: id  0 | task 0 |    graphs reused =          0
+2.58.454.418 I slot      release: id  0 | task 0 | stop processing: n_tokens = 11312, truncated = 0
+[memguard] fertig nach 179s: MemAvailable Start 104.7 GiB, Minimum 15.4 GiB (Verbrauch 89.3 GiB), Peak GTT 89.5 GiB, Peak RSS 1.6 GiB, exit -9

@@ -1,0 +1,84 @@
+/home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/llama-server -m /home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ2_XXS.glm5-next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf -ngl 99 -c 16384 -np 1 -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 -t 8 --load-mode none --cache-ram 512 --spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75 --jinja --chat-template-kwargs '{"reasoning_effort": "low"}' --temp 1.0 --top-p 0.95 --top-k 0 --min-p 0.0 --host 127.0.0.1 --port 8096 -a glm-5.3-flash --no-webui -lv 3
+0.00.020.951 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.021.048 I srv          init: The UI is disabled
+0.00.021.049 I srv          init: Use --ui/--no-ui (or deprecated --webui/--no-webui) to enable/disable
+0.00.021.120 W srv  llama_server: -----------------
+0.00.021.121 W srv  llama_server: CORS is set to allow all origins ('*') and no API key is set
+0.00.021.121 W srv  llama_server: this can be a security risk (cross-origin attacks)
+0.00.021.121 W srv  llama_server: more info: https://github.com/ggml-org/llama.cpp/pull/25655
+0.00.021.121 W srv  llama_server: -----------------
+0.00.022.379 I srv    load_model: loading model '/home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ2_XXS.glm5-next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf'
+0.00.797.894 W load: special_eot_id is not in special_eog_ids - the tokenizer config may be incorrect
+0.00.797.897 W load: special_eom_id is not in special_eog_ids - the tokenizer config may be incorrect
+1.13.047.180 I cmn          init: llama threadpool init, n_threads = 8
+1.13.324.264 I common_speculative_init_result: creating MTP draft context against the target model '/home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ2_XXS.glm5-next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf'
+1.13.501.440 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 16384, kv_unified = 'false'
+1.13.763.797 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+1.13.763.843 I srv  llama_server: model loaded
+1.13.763.847 I srv  llama_server: listening on http://127.0.0.1:8096
+1.13.994.515 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+1.13.994.597 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+/home/lyra/models/strix-halo-glm-5.3-flash/engine/src-tk-merged/src/llama-context.cpp:2063: GGML_ASSERT(width == mtp_dsa_sel_width) failed
+⚠️ warning: The current terminal doesn't support styling.  Styled output might not appear as expected.
+[New LWP 2405074]
+[New LWP 2404229]
+[New LWP 2404220]
+[New LWP 2404219]
+[New LWP 2404218]
+[New LWP 2404217]
+[New LWP 2404216]
+[New LWP 2404215]
+[New LWP 2404214]
+[New LWP 2404213]
+[New LWP 2404212]
+[New LWP 2404211]
+[New LWP 2404210]
+[New LWP 2404209]
+[New LWP 2404208]
+[New LWP 2404207]
+[New LWP 2404206]
+[New LWP 2404205]
+[New LWP 2404204]
+[New LWP 2404203]
+[New LWP 2404202]
+[New LWP 2404201]
+[New LWP 2404200]
+[New LWP 2404199]
+[New LWP 2404198]
+[New LWP 2404197]
+[New LWP 2404196]
+[New LWP 2404195]
+[New LWP 2404194]
+[New LWP 2404193]
+[New LWP 2404192]
+[New LWP 2404191]
+[New LWP 2404190]
+[New LWP 2404189]
+[New LWP 2404187]
+[New LWP 2404186]
+[New LWP 2404185]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib64/libthread_db.so.1".
+0x00007f2879e82312 in __syscall_cancel_arch () from /lib64/libc.so.6
+#0  0x00007f2879e82312 in __syscall_cancel_arch () from /lib64/libc.so.6
+#1  0x00007f2879e7652c in __internal_syscall_cancel () from /lib64/libc.so.6
+#2  0x00007f2879e76574 in __syscall_cancel () from /lib64/libc.so.6
+#3  0x00007f2879ee614f in wait4 () from /lib64/libc.so.6
+#4  0x00007f288045a19b in ggml_print_backtrace () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libggml-base.so.0
+#5  0x00007f288045a30d in ggml_abort () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libggml-base.so.0
+#6  0x00007f287f25b732 in llama_context::decode(llama_batch const&) () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama.so.0
+#7  0x00007f287f25b7de in llama_decode () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama.so.0
+#8  0x00007f287fa27e66 in common_speculative_impl_draft_mtp::process(llama_batch const&) () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama-common.so.0
+#9  0x00007f287fa1d290 in common_speculative_process(common_speculative*, llama_batch const&) () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama-common.so.0
+#10 0x00007f287fed22cb in std::_Function_handler<void (), server_context_impl::decode(int&, int, llama_batch&)::{lambda()#2}>::_M_invoke(std::_Any_data const&) () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama-server-impl.so
+#11 0x00007f287fe8ce35 in server_queue::yield_to_queue(std::function<void ()>&&) () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama-server-impl.so
+#12 0x00007f287fee8f78 in server_context_impl::decode(int&, int, llama_batch&) () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama-server-impl.so
+#13 0x00007f287feea587 in server_context_impl::update_slots() () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama-server-impl.so
+#14 0x00007f287fe8d8d8 in server_queue::start_loop(long) () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama-server-impl.so
+#15 0x00007f287fe46d89 in llama_server(common_params&, int, char**) () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama-server-impl.so
+#16 0x00007f287fe4892f in llama_server(int, char**) () from /home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/libllama-server-impl.so
+#17 0x00007f2879e0a681 in __libc_start_call_main () from /lib64/libc.so.6
+#18 0x00007f2879e0a798 in __libc_start_main_impl () from /lib64/libc.so.6
+#19 0x00000000004003b5 in _start ()
+[Inferior 1 (process 2404183) detached]
+[memguard] fertig nach 108s: MemAvailable Start 106.6 GiB, Minimum 7.8 GiB (Verbrauch 98.7 GiB), Peak GTT 96.9 GiB, Peak RSS 1.7 GiB, exit -6

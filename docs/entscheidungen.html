@@ -16,13 +16,16 @@ Entscheidungen, die von Messwerten abhängen, sind als vorläufig markiert.</p>
 
 <div class="decision" id="engine"><h3>Engine: PR #27773 + PR #27917 (timkhronos), unsloth #27754 als Vergleich</h3><dl>
 <dt>Entscheidung</dt><dd><strong>Vier HIP-Builds: <code>tk-mtp</code> (#27917 auf #27773, Stand 02.09.), <code>unsloth</code> (#27754 mit MTP, 04.09.),
-<code>tk</code> (#27773-HEAD 04.09., ohne MTP) und <code>tk-merged</code> (#27917 auf den #27773-HEAD gemergt, experimentell). Hauptkandidat: <code>tk-mtp</code>.</strong></dd>
+<code>tk</code> (#27773-HEAD 04.09., ohne MTP) und <code>tk-merged</code> (#27917 auf den #27773-HEAD gemergt, experimentell).
+Nach dem Stream-Benchmark vom 5. September: <code>unsloth</code> ist die Standard-Engine (MTP funktioniert, schnellster Decode),
+<code>tk</code> der Fallback ohne MTP; <code>tk-mtp</code> und <code>tk-merged</code> stürzen mit MTP ab etwa 2k Token Kontext ab.</strong></dd>
 <dt>Begründung</dt><dd>#27773 ist der Branch, auf den upstream zusteuert (approved von CISC und ngxson), hat den Pooled-Index-Cache (Decode
 bleibt mit der Tiefe konstant: 25,3 → 23,7 t/s bei 29k, während #27754 auf 14,6 fiel), korrektes und speicherflaches <code>-fa on</code>,
 Vision und Multi-Stream. #27917 liefert dazu den NextN-Draft ohne separates Draft-GGUF. Der unsloth-Branch ist die einzige
 zweite Implementierung mit MTP und läuft mit den Original-Dateien; er baut den Graph aber jeden Token neu (~7 % Verlust).</dd>
 <dt>Beleg</dt><dd>PR-Diskussionen #27773/#27917/#27754 (nicholasshirley, borakilo, noonghunna), GitHub-API-Stände vom 05.09., eigene
 Git-Prüfung der Branches (<code>engine/patches/PINNED.env</code>).</dd>
+<dt>Gemessen</dt><dd>UD-IQ2_XXS ohne MTP: tk 10,1 t/s, unsloth 13,0 t/s; unsloth mit MTP 14,3 (IQ2_XXS) / 15,7 (IQ1_M); tk-mtp und tk-merged: <code>GGML_ASSERT(width == mtp_dsa_sel_width)</code> bei Prompts ab ~3k Token, mit 863 und 2089 Token lauffähig (16,5 / 10,7 t/s).</dd>
 <dt>Verworfen</dt><dd>vcruz305-Fork (Basis des Versuchs vom 29.08.): 180 Commits hinter master, ohne den HIP-Top-k-Fix. eauchs #27752: textonly, kein MTP.</dd>
 </dl></div>
 
@@ -54,13 +57,14 @@ bisher auf die CPU zurück – das ist die wahrscheinliche Ursache für den Einb
 <dt>Offen</dt><dd>Messung bei Tiefe 0/8k/32k (<code>bench/llama_bench.sh</code>). Vulkan als Vergleich, sobald glslc/Header installiert sind.</dd>
 </dl></div>
 
-<div class="decision" id="mtp"><h3>MTP: an, Draft-Tiefe 2 (vorläufig)</h3><dl>
-<dt>Entscheidung</dt><dd><strong><code>--spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75</code> in den Einzelnutzer-Presets; Mehrnutzer ohne MTP.</strong></dd>
+<div class="decision" id="mtp"><h3>MTP: an (unsloth-Engine), Draft-Tiefe 2</h3><dl>
+<dt>Entscheidung</dt><dd><strong><code>--spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75</code> in den Einzelnutzer-Presets der unsloth-Engine; Mehrnutzer ohne MTP (kein Gewinn, aber auch kein Verlust).</strong></dd>
 <dt>Begründung</dt><dd>Akzeptanz je Position 0,92/0,81/0,60/0,44/0,35 (PR #27917) – ab Position 3 lohnt der Draft kaum. unsloth nennt n = 2 als
 Optimum. Auf 4×Ampere mit allem im VRAM war MTP langsamer als ohne; Strix Halo ist bandbreitenlimitiert, dort hat MTP beim
 Qwen-Modell 21 → 35 t/s gebracht.</dd>
 <dt>Beleg</dt><dd>PR #27917, borakilo-Messung, unsloth-Doku; Qwen-Projekt (gleiche Maschine).</dd>
-<dt>Offen</dt><dd><code>bench/mtp_sweep.py</code>: n 1–4, p_min, Temperatur, ngram-mod, je Engine.</dd>
+<dt>Gemessen</dt><dd>unsloth, UD-IQ1_M, 8k Prompt: 13,4 → 15,7 t/s (+17 %), Akzeptanz 82–84 % bei 1–4 Streams. Weniger als bei Qwen3.8 (+70 %), weil der Draft-Head nur 2,6 Token je Runde beisteuert und der Aufwand je Token nicht nur aus dem Gewichte-Lesen besteht.</dd>
+<dt>Offen</dt><dd><code>bench/mtp_sweep.py</code>: n 1–4, p_min, Temperatur, ngram-mod.</dd>
 </dl></div>
 
 <div class="decision" id="kv"><h3>KV-Cache q8_0, Flash-Attention an, ubatch 1024</h3><dl>

@@ -1,0 +1,42 @@
+/home/lyra/models/strix-halo-glm-5.3-flash/engine/build-unsloth-hip/bin/llama-server -m /home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ2_XXS.glm5next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf -ngl 99 -c 16384 -np 1 -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 -t 8 --load-mode none --cache-ram 512 --spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75 --jinja --chat-template-kwargs '{"reasoning_effort": "low"}' --temp 1.0 --top-p 0.95 --top-k 0 --min-p 0.0 --host 127.0.0.1 --port 8096 -a glm-5.3-flash --no-webui -lv 3
+0.00.021.881 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.021.981 I srv          init: The UI is disabled
+0.00.021.983 I srv          init: Use --ui/--no-ui (or deprecated --webui/--no-webui) to enable/disable
+0.00.022.050 W srv  llama_server: -----------------
+0.00.022.051 W srv  llama_server: CORS is set to allow all origins ('*') and no API key is set
+0.00.022.051 W srv  llama_server: this can be a security risk (cross-origin attacks)
+0.00.022.052 W srv  llama_server: more info: https://github.com/ggml-org/llama.cpp/pull/25655
+0.00.022.052 W srv  llama_server: -----------------
+0.00.023.318 I srv    load_model: loading model '/home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ2_XXS.glm5next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf'
+0.00.802.529 W load: special_eot_id is not in special_eog_ids - the tokenizer config may be incorrect
+0.00.802.534 W load: special_eom_id is not in special_eog_ids - the tokenizer config may be incorrect
+1.17.533.656 W create_memory: indexer key cache stays f16 rather than q8_0: it also holds the compressor gates
+1.17.749.238 I cmn          init: llama threadpool init, n_threads = 8
+1.18.278.730 I common_speculative_init_result: creating MTP draft context against the target model '/home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ2_XXS.glm5next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf'
+1.18.690.988 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 16384, kv_unified = 'false'
+1.18.832.924 W srv          init: chat template supports preserving reasoning, it is enabled by default (may use more tokens, disable via --no-reasoning-preserve)
+1.18.832.974 I srv  llama_server: model loaded
+1.18.832.982 I srv  llama_server: listening on http://127.0.0.1:8096
+1.19.996.765 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+1.19.996.818 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+1.45.498.313 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   4105, progress = 0.38, t =  21.44 s / 191.45 tokens per second
+2.13.316.285 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   8201, progress = 0.76, t =  48.31 s / 169.76 tokens per second
+2.25.256.548 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   9773, progress = 0.90, t =  62.50 s / 156.37 tokens per second
+2.33.189.690 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =  10797, progress = 1.00, t =  69.54 s / 155.27 tokens per second
+2.40.266.191 I slot print_timing: id  0 | task 0 | n_gen =    100, tg =  14.96 t/s, tg_3s =  15.12 t/s
+2.43.374.761 I slot print_timing: id  0 | task 0 | n_gen =    144, tg =  14.71 t/s, tg_3s =  14.15 t/s
+2.46.444.964 I slot print_timing: id  0 | task 0 | n_gen =    189, tg =  14.69 t/s, tg_3s =  14.66 t/s
+2.49.511.067 I slot print_timing: id  0 | task 0 | n_gen =    235, tg =  14.75 t/s, tg_3s =  15.00 t/s
+2.52.569.490 I slot print_timing: id  0 | task 0 | n_gen =    278, tg =  14.64 t/s, tg_3s =  14.06 t/s
+2.55.614.812 I slot print_timing: id  0 | task 0 | n_gen =    320, tg =  14.52 t/s, tg_3s =  13.79 t/s
+2.58.633.483 I slot print_timing: id  0 | task 0 | n_gen =    359, tg =  14.33 t/s, tg_3s =  12.92 t/s
+3.01.699.096 I slot print_timing: id  0 | task 0 | n_gen =    403, tg =  14.33 t/s, tg_3s =  14.35 t/s
+3.04.728.598 I slot print_timing: id  0 | task 0 | n_gen =    450, tg =  14.45 t/s, tg_3s =  15.51 t/s
+3.07.739.968 I slot print_timing: id  0 | task 0 | n_gen =    489, tg =  14.32 t/s, tg_3s =  12.95 t/s
+3.09.294.785 I slot print_timing: id  0 | task 0 | prompt eval time =   73653.56 ms / 10801 tokens (    6.82 ms per token,   146.65 tokens per second)
+3.09.294.789 I slot print_timing: id  0 | task 0 |        eval time =   35644.34 ms /   512 tokens (   69.75 ms per token,    14.34 tokens per second)
+3.09.294.790 I slot print_timing: id  0 | task 0 |       total time =  109297.91 ms / 11313 tokens
+3.09.294.796 I slot print_timing: id  0 | task 0 |    graphs reused =          0
+3.09.294.801 I slot print_timing: id  0 | task 0 | draft acceptance = 0.79004 (  222 accepted /   281 generated), mean len =  2.23
+3.09.308.208 I slot      release: id  0 | task 0 | stop processing: n_tokens = 11312, truncated = 0
+[memguard] fertig nach 190s: MemAvailable Start 103.9 GiB, Minimum 5.5 GiB (Verbrauch 98.4 GiB), Peak GTT 97.0 GiB, Peak RSS 2.1 GiB, exit -9

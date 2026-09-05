@@ -1,0 +1,48 @@
+{
+ "tag": "unsloth-UD-IQ1_M-mtp-20260905-221346",
+ "cmd": "/home/lyra/models/strix-halo-glm-5.3-flash/engine/build-unsloth-hip/bin/llama-server -m /home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ1_M.glm5next/GLM-5.3-Flash-UD-IQ1_M-00001-of-00003.gguf -ngl 99 -c 65536 -np 4 --kv-unified -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 -t 8 --load-mode none --cache-ram 512 --spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75 --jinja --chat-template-kwargs '{\"reasoning_effort\": \"low\"}' --temp 1.0 --top-p 0.95 --top-k 0 --min-p 0.0 --host 127.0.0.1 --port 8096 -a glm-5.3-flash --no-webui -lv 3",
+ "levels": [
+  {
+   "users": 1,
+   "wall_s": 107.74389243125916,
+   "tokens": 512,
+   "total_tps": 4.752009496284508,
+   "decode_sum_tps": 15.74251481159614,
+   "pp_tps": 143.52644570105275,
+   "prompt_n": 10801,
+   "per_user_tps": 15.74251481159614,
+   "mixups": 0,
+   "errors": 0,
+   "accept": 0.8152173913043478,
+   "ttft_s": 75.254424
+  },
+  {
+   "users": 2,
+   "wall_s": 240.3427095413208,
+   "tokens": 1024,
+   "total_tps": 4.260582740180639,
+   "decode_sum_tps": 15.21751520061207,
+   "pp_tps": 62.36023229431075,
+   "prompt_n": 21344,
+   "per_user_tps": 7.608757600306035,
+   "mixups": 0,
+   "errors": 0,
+   "accept": 0.8290441176470589,
+   "ttft_s": 171.30063400000003
+  },
+  {
+   "users": 4,
+   "wall_s": 590.317234992981,
+   "tokens": 2048,
+   "total_tps": 3.4693210338409846,
+   "decode_sum_tps": 9.809688951118,
+   "pp_tps": 38.07895103601491,
+   "prompt_n": 42770,
+   "per_user_tps": 2.4524222377795,
+   "mixups": 0,
+   "errors": 0,
+   "accept": 0.8397839783978398,
+   "ttft_s": 329.497774
+  }
+ ]
+}

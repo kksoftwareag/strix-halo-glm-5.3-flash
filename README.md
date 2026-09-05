@@ -11,8 +11,10 @@ und zu messen. Das Modell ist in llama.cpp noch nicht gemerged; dieses Projekt k
 
 Alle Entscheidungen, die Recherche mit Quellen und der Messplan stehen in `docs/` (Website) und `docs/RESEARCH.md`.
 
-**Stand 5. September 2026: vorbereitet, noch nicht gemessen.** Es wurde bewusst kein llama.cpp gestartet, weil auf der
-Maschine ein anderer Server lief. Reihenfolge der Messungen: `bench/README.md`.
+**Stand 5. September 2026, abends:** Setup steht, erste Messungen liegen vor (Footprint-Probe, Stream-Benchmark mit 1/2/4 Nutzern
+über drei Engines und zwei Quants). Ergebnis in Kürze: unsloth-Engine mit MTP 14,3 t/s (UD-IQ2_XXS) bzw. 15,7 t/s (UD-IQ1_M) bei
+8k Prompt-Tiefe, Prefill 150 t/s, mehrere Streams erhöhen den Durchsatz nicht; der MTP-PR #27917 stürzt ab etwa 2k Token Kontext ab.
+Details: `docs/benchmarks.html`, `docs/RESEARCH.md` Abschnitt 8. Offene Messungen: `bench/README.md`.
 
 ## Was hier drin ist
 
@@ -29,8 +31,9 @@ Maschine ein anderer Server lief. Reihenfolge der Messungen: `bench/README.md`.
 ## Die wichtigsten Erkenntnisse der Recherche
 
 1. **Branches.** PR #27773 (timkhronos, Schema `glm5-next`) ist der Kandidat für den Merge (zwei Approvals); MTP kommt aus
-   PR #27917 (`--spec-type draft-mtp`, NextN im Haupt-GGUF, Akzeptanz 0,74). Der unsloth-Branch #27754 (`glm5next`) hat seit
-   30.08. ebenfalls MTP. Alle drei enthalten den ROCm-Radix-Top-k (#27466), ohne den der Decode bei Tiefe einbrach.
+   PR #27917 (`--spec-type draft-mtp`, NextN im Haupt-GGUF) – auf dieser Maschine stürzt #27917 aber ab etwa 2k Token Kontext
+   mit `GGML_ASSERT(width == mtp_dsa_sel_width)` ab. Der unsloth-Branch #27754 (`glm5next`) hat eine eigene, funktionierende
+   MTP-Implementierung und ist deshalb die Standard-Engine. Alle enthalten den ROCm-Radix-Top-k (#27466).
 2. **GGUF-Schema.** Die unsloth-Quants liegen im Schema `glm5next`; für #27773 braucht nur Shard 1 (9 MB) ein anderes Header
    (unsloth `Shard_Rewrite/` oder `./run.sh rename-shard1`). `./run.sh variants --create` legt beide Sätze per Symlink an.
 3. **Speicher.** llama.cpp/HIP nutzt auf gfx1151 den BIOS-VRAM-Carve-out (16 GiB) nicht – alles liegt in GTT. Mit 16 GiB
@@ -46,13 +49,13 @@ models/fetch.sh iq2xxs            # UD-IQ2_XXS (liegt hier bereits vor)
 ./run.sh variants --create        # Shard-Sätze je Schema
 engine/fetch.sh && engine/build.sh all hip
 ./run.sh models                   # Inventar und Maschine
-./run.sh show --preset tkmtp-agent
-python3 bench/mem_probe.py probe-tkmtp --preset tkmtp-agent --ctx 32768   # erster Lauf: Footprint messen
-./serve.sh --preset tkmtp-agent   # Server unter dem Speicher-Wächter
+./run.sh show --preset unsloth-agent
+python3 bench/mem_probe.py probe-unsloth --preset unsloth-agent --ctx 32768   # erster Lauf: Footprint messen
+./serve.sh --preset unsloth-agent   # Server unter dem Speicher-Wächter
 uv run --group dev pytest -q      # Tests
 ```
 
-Engines: `tk-mtp` (Standard), `unsloth`, `tk` (ohne MTP), `tk-merged` (experimentell). Presets: `./run.sh presets`.
+Engines: `unsloth` (Standard, MTP), `tk` (ohne MTP), `tk-mtp` und `tk-merged` (MTP-Assert, siehe Recherche). Presets: `./run.sh presets`.
 
 ## Ordner
 

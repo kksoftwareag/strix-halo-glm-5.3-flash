@@ -36,22 +36,22 @@ engine/build.sh all hip       # oder: nohup engine/build-all.sh &amp;
 
 # 4. Prüfen und starten
 ./run.sh models               # was gefunden wurde
-./run.sh show --preset tkmtp-agent     # Speicherbilanz und Kommandozeile
-./serve.sh --preset tkmtp-agent        # Server unter dem Speicher-Wächter
+./run.sh show --preset unsloth-agent   # Speicherbilanz und Kommandozeile
+./serve.sh --preset unsloth-agent      # Server unter dem Speicher-Wächter
 </code></pre>
 
 <h2>Presets</h2>
 <div class="tablewrap"><table>
 <tr><th>Preset</th><th>Engine</th><th>Quant</th><th>Kontext</th><th>MTP</th><th>Zweck</th></tr>
-<tr><td>tkmtp-agent (Standard)</td><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>131072</td><td>n2</td><td>Agenten, ein Nutzer</td></tr>
-<tr><td>tkmtp-agent-n3</td><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>131072</td><td>n3</td><td>Vergleich der Draft-Tiefe</td></tr>
-<tr><td>merged-agent</td><td>tk-merged</td><td>UD-IQ2_XXS</td><td>131072</td><td>n2</td><td>experimentell: neueste Basis + MTP</td></tr>
-<tr><td>unsloth-agent</td><td>unsloth</td><td>UD-IQ2_XXS</td><td>131072</td><td>n2</td><td>A/B-Vergleich</td></tr>
+<tr><td>unsloth-agent (Standard)</td><td>unsloth</td><td>UD-IQ2_XXS</td><td>131072</td><td>n2</td><td>Agenten, ein Nutzer: 14,3 t/s bei 8k Tiefe</td></tr>
+<tr><td>tkmtp-agent</td><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>131072</td><td>n2</td><td class="bad">stürzt ab ~2k Token Kontext ab (#27917-Assert)</td></tr>
+<tr><td>tkmtp-agent-n3</td><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>131072</td><td>n3</td><td class="bad">wie oben</td></tr>
+<tr><td>merged-agent</td><td>tk-merged</td><td>UD-IQ2_XXS</td><td>131072</td><td>n2</td><td class="bad">wie oben (gleicher MTP-Code)</td></tr>
 <tr><td>tk-plain</td><td>tk</td><td>UD-IQ2_XXS</td><td>131072</td><td>aus</td><td>Basislinie</td></tr>
-<tr><td>chat-vision</td><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>65536</td><td>n2</td><td>Chat mit Bildern, Web-UI</td></tr>
-<tr><td>chat-fast</td><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>32768</td><td>n2 + ngram</td><td>schneller Chat, reasoning low</td></tr>
+<tr><td>chat-vision</td><td>unsloth</td><td>UD-IQ2_XXS</td><td>65536</td><td>n2</td><td>Chat mit Bildern, Web-UI</td></tr>
+<tr><td>chat-fast</td><td>unsloth</td><td>UD-IQ2_XXS</td><td>32768</td><td>n2 + ngram</td><td>schneller Chat, reasoning low</td></tr>
 <tr><td>multiuser-4</td><td>tk</td><td>UD-IQ2_XXS</td><td>4 × 65536</td><td>aus</td><td>mehrere Nutzer</td></tr>
-<tr><td>q2kxl-agent</td><td>tk-mtp</td><td>UD-Q2_K_XL</td><td>131072</td><td>n2</td><td>nur mit kleinem Carve-out</td></tr>
+<tr><td>q2kxl-agent</td><td>unsloth</td><td>UD-Q2_K_XL</td><td>131072</td><td>n2</td><td>nur mit kleinem Carve-out</td></tr>
 <tr><td>spark-agent</td><td>unsloth</td><td>Spark-Q2XL-MTP</td><td>131072</td><td>n2</td><td>nur mit kleinem Carve-out</td></tr>
 </table></div>
 <p>Overrides: <code>--quant</code>, <code>--engine</code>, <code>--ctx</code>, <code>--np</code>, <code>--mtp/--no-mtp</code>, <code>--spec-n</code>, <code>--reasoning low|high|max</code>,
@@ -59,17 +59,17 @@ engine/build.sh all hip       # oder: nohup engine/build-all.sh &amp;
 <code>--save-profile NAME</code>.</p>
 
 <h2>Empfohlene Kommandozeile (ohne Programm)</h2>
-<pre><code>engine/build-tk-mtp-hip/bin/llama-server \
-  -m models/variants/UD-IQ2_XXS.glm5-next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf \
+<pre><code>engine/build-unsloth-hip/bin/llama-server \
+  -m models/variants/UD-IQ2_XXS.glm5next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf \
   -ngl 99 -c 131072 -np 1 -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 -t 8 \
   --load-mode none --cache-ram 512 \
   --spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75 \
   --jinja --chat-template-kwargs '{"reasoning_effort": "high"}' \
   --temp 1.0 --top-p 0.95 --top-k 0 --min-p 0 \
   --host 0.0.0.0 --port 8080 -a glm-5.3-flash --metrics</code></pre>
-<p>Für die unsloth-Engine denselben Aufruf mit <code>engine/build-unsloth-hip/bin/llama-server</code> und dem Shard-Satz
-<code>models/variants/UD-IQ2_XXS.glm5next/</code>. Mehrere Nutzer: <code>-np N --kv-unified</code>, MTP-Zeile weglassen. Vision:
-<code>--mmproj</code> mit dem AesSedai-Projektor (glm5-next) bzw. dem unsloth-Projektor (glm5next).</p>
+<p>Für die timkhronos-Engines (<code>tk</code>, ohne MTP) denselben Aufruf mit <code>engine/build-tk-hip/bin/llama-server</code> und dem
+Shard-Satz <code>models/variants/UD-IQ2_XXS.glm5-next/</code>, dort ohne die MTP-Zeile. Mehrere Nutzer: <code>-np N --kv-unified</code>. Vision:
+<code>--mmproj</code> mit dem unsloth-Projektor (glm5next) bzw. dem AesSedai-Projektor (glm5-next).</p>
 
 <h2>Vor dem ersten Start prüfen</h2>
 <ol>

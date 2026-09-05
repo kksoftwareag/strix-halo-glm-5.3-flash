@@ -16,9 +16,9 @@
 und die Messreihen, sobald sie gelaufen sind.</p>
 
 <div class="cards">
-<div class="card"><h3>Empfohlene Konfiguration (vorläufig)</h3><div class="big">UD-IQ2_XXS + MTP</div><div class="sub">PR #27917 auf #27773 (timkhronos), 128k Kontext, KV q8_0, Draft-Tiefe 2 – <span class="warn">ungemessen</span></div></div>
-<div class="card"><h3>Speicher</h3><div class="big">~100 GB</div><div class="sub">von 105 GB nutzbar; 16 GB BIOS-VRAM-Carve-out liegen brach, siehe Speicher</div></div>
-<div class="card"><h3>Vorlauf vom 29.08.</h3><div class="big">14 t/s</div><div class="sub">UD-IQ2_XXS, unsloth-Fork ohne HIP-Top-k-Fix, ohne MTP; fiel bei 42k Tiefe auf 7 t/s</div></div>
+<div class="card"><h3>Empfohlene Konfiguration</h3><div class="big">unsloth + MTP</div><div class="sub">PR #27754, UD-IQ2_XXS, KV q8_0, Draft-Tiefe 2: 14,3 t/s bei 8k Tiefe, 79 % Akzeptanz</div></div>
+<div class="card"><h3>Prefill</h3><div class="big">150 t/s</div><div class="sub">bei jeder Slot-Zahl; ein 8k-Prompt braucht 72 s bis zum ersten Token</div></div>
+<div class="card"><h3>Speicher</h3><div class="big">98–100 GB</div><div class="sub">von 105 GB; 16 GB BIOS-VRAM-Carve-out liegen brach, siehe Speicher</div></div>
 </div>
 
 <h2>Einführung</h2>
@@ -39,16 +39,24 @@ Nur Shard 1 (9 MB) unterscheidet sich; das Programm legt je Schema einen Shard-S
 BIOS-VRAM-Carve-out 16 GB beträgt. Mit 1 GB Carve-out passen UD-Q2_K_XL und zwei Community-Quants mit 2,8 bpw. <a href="speicher.html">Speicher</a></li>
 <li><strong>HIP-Fix:</strong> Der Radix-Top-k für lange Zeilen (#27466, seit 31.08. in master) steckt in allen drei Kandidaten
 und fehlt in dem Fork, der am 29.08. bei Tiefe einbrach. <a href="entscheidungen.html#backend">Entscheidung</a></li>
-<li><strong>MTP:</strong> Akzeptanz laut PR 0,74; Draft-Tiefe 2 bis 3 auf bandbreitenlimitierter Hardware. Auf GPUs mit
-allem im VRAM war MTP langsamer – ob Strix Halo profitiert, entscheidet die Messung. <a href="benchmarks.html#mtp">Messungen</a></li>
+<li><strong>MTP:</strong> Auf der unsloth-Engine +17 % Decode (13,4 → 15,7 t/s bei UD-IQ1_M, Akzeptanz 82 %). Der MTP-PR #27917
+stürzt auf dieser Maschine ab etwa 2k Token Kontext mit einem Assert ab und ist für Agenten-Prompts derzeit unbrauchbar.
+<a href="benchmarks.html#multiuser">Messungen</a></li>
+<li><strong>Streams:</strong> Prefill liegt bei rund 150 t/s gesamt, Decode bei 10 bis 16 t/s – und mehrere gleichzeitige Streams
+erhöhen den Gesamtdurchsatz nicht (anders als bei Qwen3.8). <a href="benchmarks.html#multiuser">Messungen</a></li>
 <li><strong>Speicherschutz:</strong> Speicherbilanz vor dem Start, Wächter im Betrieb; Downloads und Builds laufen in
 cgroups mit Speicherdeckel, damit ein parallel laufender Server nicht verdrängt wird. <a href="entscheidungen.html#guard">Entscheidung</a></li>
 </ol>
 
+<h2>Decode-Geschwindigkeit (ein Stream, 8k Prompt, 512 Token)</h2>
+<div class="bars"><div class="bar"><span class="label">tk (#27773) ohne MTP</span><span class="track"><span class="fill" style="width:64%"></span></span><span class="val">10,1 t/s</span></div><div class="bar"><span class="label">unsloth IQ2_XXS ohne MTP</span><span class="track"><span class="fill" style="width:83%"></span></span><span class="val">13,0 t/s</span></div><div class="bar"><span class="label">unsloth IQ1_M ohne MTP</span><span class="track"><span class="fill" style="width:85%"></span></span><span class="val">13,4 t/s</span></div><div class="bar"><span class="label">unsloth IQ2_XXS + MTP</span><span class="track"><span class="fill" style="width:91%"></span></span><span class="val">14,3 t/s</span></div><div class="bar"><span class="label">unsloth IQ1_M + MTP</span><span class="track"><span class="fill" style="width:100%"></span></span><span class="val">15,7 t/s</span></div></div>
+<p class="sub">UD-IQ2_XXS bzw. UD-IQ1_M, KV q8_0, 16k Kontext, reasoning low. Prefill in allen Fällen rund 150 t/s. Alle Zahlen: <a href="benchmarks.html">Messungen</a>.</p>
+
 <h2>Status</h2>
-<div class="note">Stand 5. September 2026: Recherche, Engines (vier HIP-Builds), Modellvarianten, Speicherschätzung, Start-Presets,
-Bench- und Qualitäts-Skripte sowie diese Dokumentation sind vorbereitet. <strong>Es wurde noch kein llama.cpp gestartet</strong>,
-weil auf der Maschine ein anderer Server lief. Die Messreihen folgen nach Freigabe; Reihenfolge in <code>bench/README.md</code>.</div>
+<div class="note">Stand 5. September 2026, abends: Recherche, vier HIP-Engines, Modellvarianten, Speicherschätzung, Presets, Bench- und
+Qualitäts-Skripte und diese Dokumentation stehen. <strong>Gemessen:</strong> Footprint-Probe und ein Stream-Benchmark mit 1/2/4 Nutzern
+über drei Engines und zwei Quants (18 Läufe). <strong>Offen:</strong> MTP-Feintuning, llama-bench über die Tiefe, Terminal-Bench-Mini-20,
+BIOS-Carve-out.</div>
 
 </div></main>
 <footer><div class="wrap">Stand: 5. September 2026 · Vorbereitung auf einem Ryzen AI MAX+ 395 (Radeon 8060S, 128 GB) unter Fedora 44, ROCm/HIP 7.1 · Messungen ausstehend · Projekt: <a href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash">kksoftwareag/strix-halo-glm-5.3-flash</a> · Diese Seiten liegen im Ordner <code>docs/</code> des Projekts</div></footer>

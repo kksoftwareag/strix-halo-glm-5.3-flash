@@ -70,15 +70,22 @@ def main():
     ap.add_argument("--mtp", action="store_true")
     ap.add_argument("--reasoning", default="low")
     ap.add_argument("--min-avail-gib", type=float, default=8.0)
+    ap.add_argument("--budget-gib", type=float, default=None, help="Speicherbudget für die Vorprüfung statt MemAvailable (z.B. 105)")
+    ap.add_argument("--batch", type=int, default=None, help="-b (Logical Batch) überschreiben")
+    ap.add_argument("--ub", type=int, default=None, help="-ub (Physical Batch) überschreiben")
     a = ap.parse_args()
     with socket.socket() as s:
         if s.connect_ex(("127.0.0.1", PORT)) == 0:
             print("Port belegt"); sys.exit(2)
     levels = [int(x) for x in a.levels.split(",")]
     slots = max(levels)
-    cfg = ServerConfig(engine=a.engine, quant=a.quant, n_parallel=slots, kv_unified=True, ctx_size=a.ctx_per_slot * slots,
+    cfg = ServerConfig(engine=a.engine, quant=a.quant, n_parallel=slots, kv_unified=slots > 1, ctx_size=a.ctx_per_slot * slots,
                        mtp_enabled=a.mtp, reasoning_effort=a.reasoning, host="127.0.0.1", port=PORT, metrics=False)
-    cmd = build_command(cfg, discover_all(), probe())
+    if a.batch:
+        cfg = cfg.copy(batch=a.batch)
+    if a.ub:
+        cfg = cfg.copy(ubatch=a.ub)
+    cmd = build_command(cfg, discover_all(), probe(), budget=int(a.budget_gib * 2**30) if a.budget_gib else None)
     if not cmd.ok:
         print("FEHLER:", cmd.errors); sys.exit(1)
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -109,12 +116,15 @@ def main():
             gen = sum(r.get("predicted_n", 0) for r in results)
             per = [r.get("predicted_per_second", 0) for r in results if "error" not in r]
             dn = sum(r.get("draft_n", 0) for r in results); da = sum(r.get("draft_n_accepted", 0) for r in results)
+            pps = [r.get("prompt_per_second", 0) for r in results if "error" not in r and r.get("prompt_per_second")]
             lvl = {"users": n, "wall_s": wall, "tokens": gen, "total_tps": gen / wall if wall else 0,
+                   "decode_sum_tps": sum(per),   # Summe der Decode-Raten aller Streams (Prefill-Phasen herausgerechnet)
+                   "pp_tps": sum(pps) / len(pps) if pps else 0, "prompt_n": sum(r.get("prompt_n", 0) for r in results),
                    "per_user_tps": sum(per) / len(per) if per else 0, "mixups": sum(1 for r in results if r.get("ok") is False),
                    "errors": sum(1 for r in results if "error" in r), "accept": (da / dn) if dn else None,
                    "ttft_s": sum(r.get("prompt_ms", 0) for r in results) / 1000 / max(1, len(results))}
             out["levels"].append(lvl)
-            print(f"   {n:2d} Nutzer: gesamt {lvl['total_tps']:6.1f} t/s | je Nutzer {lvl['per_user_tps']:5.1f} t/s | TTFT {lvl['ttft_s']:5.1f}s | Mix-ups {lvl['mixups']} | Fehler {lvl['errors']}"
+            print(f"   {n:2d} Nutzer: Σ Decode {lvl['decode_sum_tps']:6.1f} t/s | je Nutzer {lvl['per_user_tps']:5.1f} t/s | pp je Nutzer {lvl['pp_tps']:6.1f} t/s | TTFT {lvl['ttft_s']:5.1f}s | inkl. Prefill {lvl['total_tps']:4.1f} t/s | Mix-ups {lvl['mixups']} | Fehler {lvl['errors']}"
                   + (f" | Draft {lvl['accept']:.0%}" if lvl["accept"] is not None else ""), flush=True)
     finally:
         kill_llama()

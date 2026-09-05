@@ -61,6 +61,6 @@ def test_multislot_forces_kv_unified_and_memory_limits():
 
 def test_vision_and_reasoning_validation():
     cmd = build_command(get_preset("chat-vision").apply(), inv(), hw())
-    assert cmd.ok and "--mmproj" in cmd.argv and cmd.resolved.mmproj.naming == "glm5-next"
+    assert cmd.ok and "--mmproj" in cmd.argv and cmd.resolved.mmproj.naming == "glm5next"
     bad = build_command(ServerConfig(reasoning_effort="medium"), inv(), hw())
     assert any("reasoning_effort" in e for e in bad.errors)

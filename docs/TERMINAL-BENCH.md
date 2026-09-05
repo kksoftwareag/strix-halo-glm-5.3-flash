@@ -7,8 +7,8 @@ Geplant (je ein Slot, MTP an, pass@1, reasoning_effort `high`, 131 072 Token Kon
 
 | Lauf | Engine | Quant | Zweck |
 | --- | --- | --- | --- |
-| tbmini-UD-IQ2_XXS-tkmtp-agent-high | tk-mtp (#27917 auf #27773) | UD-IQ2_XXS | Hauptkandidat |
-| tbmini-UD-IQ2_XXS-unsloth-agent-high | unsloth (#27754) | UD-IQ2_XXS | Engine-Vergleich bei gleichem Quant |
-| tbmini-UD-IQ1_S-tkmtp-agent-high | tk-mtp | UD-IQ1_S | kleinster Quant |
-| tbmini-UD-Q2_K_XL-tkmtp-agent-high | tk-mtp | UD-Q2_K_XL | nur mit kleinem VRAM-Carve-out |
+| tbmini-UD-IQ2_XXS-unsloth-agent-high | unsloth (#27754, MTP) | UD-IQ2_XXS | Hauptkandidat nach dem Stream-Benchmark |
+| tbmini-UD-IQ2_XXS-tk-plain-high | tk (#27773, ohne MTP) | UD-IQ2_XXS | Engine-Vergleich bei gleichem Quant |
+| tbmini-UD-IQ1_M-unsloth-agent-high | unsloth | UD-IQ1_M | kleinerer Quant, +10 % Decode |
+| tbmini-UD-Q2_K_XL-unsloth-agent-high | unsloth | UD-Q2_K_XL | nur mit kleinem VRAM-Carve-out |
 | tbmini-Spark-Q2XL-MTP-spark-agent-high | unsloth | Spark-Q2XL-MTP | nur mit kleinem VRAM-Carve-out |

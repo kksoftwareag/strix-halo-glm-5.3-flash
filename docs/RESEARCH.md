@@ -119,7 +119,8 @@ Denkstufe `high` (statt `medium`, das GLM nicht kennt). Vergleichswerte: Spark-R
 
 ## 7. Offene Punkte
 
-- Baut `tk-merged`, und ist der Merge korrekt? (Nur durch Vergleich der Ausgaben mit `tk-mtp` prüfbar.)
+- `tk-merged` erbt den MTP-Assert von #27917; Vergleich erst nach einem Fix sinnvoll.
+- MTP auf #27917 ab ~2k Token Kontext: Assert `width == mtp_dsa_sel_width` – upstream melden (Logs liegen vor) oder Patch.
 - Reproduziert sich der Decode-Einbruch mit der Tiefe auf HIP mit #27466? (`bench/llama_bench.sh -d 0,8192,32768`)
 - Lohnt MTP auf Strix Halo bei GLM (Akzeptanz, Draft-Tiefe, Temperatur)? (`bench/mtp_sweep.py`)
 - Graph-Reuse bei #27773 (`graphs reused = 0` im Log vom 29.08. auf dem unsloth-Fork).
@@ -127,9 +128,70 @@ Denkstufe `high` (statt `medium`, das GLM nicht kennt). Vergleichswerte: Spark-R
 - BIOS-Carve-out: Entscheidung des Betreibers; danach Q2_K_XL/Spark/AesSedai-IQ2_S messen.
 - Vulkan-Build (Pakete fehlen).
 
-## 8. Eigene Messungen
+## 8. Eigene Messungen (2026-09-05, nach dem Go)
 
-Noch keine (Vorbereitung ohne Start von llama.cpp, weil ein anderer Server lief). Ablauf nach dem Go: `bench/README.md`.
+**Footprint-Probe** `bench/mem_probe.py probe-tkmtp-32k --preset tkmtp-agent --ctx 32768` – Engine `tk-mtp` (#27917 auf #27773),
+UD-IQ2_XXS im Schema glm5-next, MTP n2/p0.75, KV q8_0, ub 1024, ein Slot, reasoning high, Prompt 39 Token, 300 Token Ausgabe:
+
+| Größe | Wert |
+| --- | --- |
+| Ladezeit bis /health | 77 s (Modell aus dem Page-Cache/NVMe, `--load-mode none`) |
+| Decode | **17,3 t/s** (300 Token; Verlauf 15,8 → 18,1 t/s) |
+| Draft-Akzeptanz | **0,87** (162 von 187), mittlere Draft-Länge 2,6 |
+| Graph-Reuse | 22 Wiederverwendungen (auf #27773 funktioniert `can_reuse`, anders als auf #27754) |
+| Speicherbedarf | **99,9 GiB** (MemAvailable 105,0 → 5,2 GiB), Peak GTT 97,2 GiB, RSS 1,6 GiB |
+| Schätzung des Programms | 99,4 GiB (Abweichung 0,5 GiB) |
+
+Folgerungen: Die Engine-Kombination lädt die unsloth-Shards mit Shard_Rewrite-Header ohne Änderung; MTP funktioniert ohne
+separates Draft-GGUF; die Speicherschätzung stimmt auf ein halbes GiB. Mit 16-GiB-Carve-out bleiben bei 32k Kontext nur 5 GiB
+frei – für 131k Kontext oder Docker-Container daneben ist das zu wenig; **der kleine BIOS-Carve-out ist damit nicht optional,
+sondern nötig**, sobald mehr als der Server allein laufen soll.
+
+**MTP auf #27917 stürzt ab, sobald der Kontext etwa 2k Token übersteigt** (eigener Befund, 05.09., 8 Läufe):
+`tk-mtp` und `tk-merged` mit `--spec-type draft-mtp` brechen bei der ersten Anfrage mit
+`GGML_ASSERT(width == mtp_dsa_sel_width)` (`llama-context.cpp:2062`) ab. Eingegrenzt mit UD-IQ1_M, `-ub 1024`:
+
+| Prompt (Token gesamt) | Ergebnis |
+| --- | --- |
+| 39 (Probe), 863, 2089 | läuft: 17,3 / 16,5 / 10,7 t/s, Akzeptanz 87 / 74 / 78 % |
+| ~3200, ~5200, ~8200 | Assert vor der ersten Fortschrittsmeldung – unabhängig von `-np 1` oder `-np 4 --kv-unified`, von UD-IQ2_XXS oder UD-IQ1_M, und von `-b 4096` oder `-b 16384` |
+
+Im Code: die Auswahlbreite für den Draft ist `4 × min(Pools, 512) + 3` und sättigt bei 512 Pools = 2048 Token; die Breite wird
+beim ersten Ubatch mit Gather-Pfad festgeschrieben und muss danach gleich bleiben. Warum 2089 Token noch laufen und ~3200
+nicht, ist ungeklärt (vermutlich Trunk- gegen Draft-Kontext beim Sättigen). **Für Agenten-Prompts ist MTP auf #27917 derzeit
+nicht nutzbar.** Die unsloth-Engine (#27754) hat eine eigene MTP-Implementierung, die mit 8k Prompts und mit vier Slots läuft.
+Nicht upstream gemeldet; Logs: `bench/results/multi/tk-mtp-*.log`, `tk-merged-*.log`.
+
+**Stream-Benchmark** (`bench/multiuser.py`, 8k Prompt mit eigenem Fülltext je Nutzer, 512 Token Ausgabe, 16k Kontext je Slot,
+`--kv-unified` ab zwei Slots, reasoning low, Codewort-Prüfung; „Σ Decode“ = Summe der Decode-Raten der Streams):
+
+| Engine | Quant | MTP | Slots | 1 Stream | 2 Streams Σ (je) | 4 Streams Σ (je) | Prefill je Stream | TTFT 8k | Akzeptanz | Bedarf |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| tk (#27773) | UD-IQ2_XXS | – | 4 | 10,5 t/s | 11,5 (5,8) | 9,1 (2,3) | 150 / 66 / 40 t/s | 72 / 162 / 311 s | – | 97,9 GiB |
+| tk (#27773) | UD-IQ2_XXS | – | 1 | 10,1 t/s | – | – | 151 t/s | 72 s | – | – |
+| unsloth (#27754) | UD-IQ1_M | n2 | 4 | **15,7 t/s** | 15,2 (7,6) | 9,8 (2,5) | 144 / 62 / 38 t/s | 75 / 171 / 330 s | 82–84 % | 100,0 GiB |
+| unsloth (#27754) | UD-IQ1_M | – | 1 | 13,4 t/s | – | – | 149 t/s | 72 s | – | – |
+| unsloth (#27754) | UD-IQ2_XXS | n2 | 1 | **14,3 t/s** | – | – | 147 t/s | 74 s | 79 % | 97,5 GiB |
+| unsloth (#27754) | UD-IQ2_XXS | – | 1 | 13,0 t/s | – | – | 152 t/s | 71 s | – | – |
+| tk-mtp / tk-merged | beide | n2 | 1 und 4 | Absturz (siehe oben) | | | | | | |
+
+Folgerungen (Stand 05.09., ohne weiteres Tuning):
+1. **Prefill ist der Engpass**: rund 150 t/s Gesamtdurchsatz bei jeder Slot-Zahl, also 72 s bis zum ersten Token für einen
+   8k-Prompt – bei vier gleichzeitigen Streams über fünf Minuten. Für Agenten mit 50–100k Kontext ist das die dominante Zeit
+   (Prompt-Cache vorausgesetzt, sonst unbrauchbar).
+2. **Continuous Batching bringt beim Decode nichts**: Σ Decode bleibt bei 1–2 Streams um 10–15 t/s und fällt bei 4 Streams.
+   Anders als bei Qwen3.8 (20 → 50 t/s) amortisiert sich das Gewichte-Lesen nicht; der Aufwand je Sequenz (KDA-Zustand,
+   Indexer-Top-k, mHC) dominiert. Mehrere Slots lohnen nur für die Latenzverteilung, nicht für den Durchsatz.
+3. **MTP bringt auf der unsloth-Engine +10 bis +17 %** (IQ2_XXS 13,0 → 14,3, IQ1_M 13,4 → 15,7 t/s, Akzeptanz 79–84 %),
+   deutlich weniger als bei Qwen3.8 (+70 %); mit vier Streams kein Nachteil (9,8 gegen 9,1 t/s ohne MTP auf tk).
+4. **Engine-Vergleich ohne MTP, gleicher Quant (UD-IQ2_XXS)**: unsloth 13,0 t/s gegen #27773-HEAD 10,1 t/s (+29 %).
+   Prefill ist gleich (150 t/s). Der Quant macht wenig aus: IQ1_M ist nur 3 % schneller als IQ2_XXS (13,4 gegen 13,0).
+   MTP auf unsloth: +10 % bei IQ2_XXS (13,0 → 14,3), +17 % bei IQ1_M (13,4 → 15,7).
+5. **Speicher**: alle Konfigurationen liegen bei 98–100 GiB Bedarf, es bleiben 5–8 GiB. Die Docker-Container des
+   Qualitäts-Benchmarks brauchen zusätzlich Platz – der kleine BIOS-Carve-out ist dafür nötig.
+
+**Empfehlung nach diesen Messungen**: Preset `unsloth-agent` (unsloth-Engine, UD-IQ2_XXS, MTP n2) für Agenten; `tk-plain`
+als Fallback; `tk-mtp` erst nach einem Fix des Asserts. Feintuning (Draft-Tiefe, ubatch, `ROCBLAS_USE_HIPBLASLT`) steht aus.
 
 ## Quellen
 

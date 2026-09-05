@@ -1,0 +1,20 @@
+{
+ "tag": "unsloth-UD-IQ1_M-nomtp-20260905-223843",
+ "cmd": "/home/lyra/models/strix-halo-glm-5.3-flash/engine/build-unsloth-hip/bin/llama-server -m /home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ1_M.glm5next/GLM-5.3-Flash-UD-IQ1_M-00001-of-00003.gguf -ngl 99 -c 16384 -np 1 -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 -t 8 --load-mode none --cache-ram 512 --jinja --chat-template-kwargs '{\"reasoning_effort\": \"low\"}' --temp 1.0 --top-p 0.95 --top-k 0 --min-p 0.0 --host 127.0.0.1 --port 8096 -a glm-5.3-flash --no-webui -lv 3",
+ "levels": [
+  {
+   "users": 1,
+   "wall_s": 110.4650251865387,
+   "tokens": 512,
+   "total_tps": 4.63495119052752,
+   "decode_sum_tps": 13.435412318343234,
+   "pp_tps": 149.16891535250318,
+   "prompt_n": 10801,
+   "per_user_tps": 13.435412318343234,
+   "mixups": 0,
+   "errors": 0,
+   "accept": null,
+   "ttft_s": 72.40784699999999
+  }
+ ]
+}

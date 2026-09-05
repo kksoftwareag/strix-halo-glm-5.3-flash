@@ -1,0 +1,20 @@
+{
+ "tag": "tk-UD-IQ2_XXS-nomtp-20260905-225036",
+ "cmd": "/home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-hip/bin/llama-server -m /home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ2_XXS.glm5-next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf -ngl 99 -c 16384 -np 1 -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 -t 8 --load-mode none --cache-ram 512 --jinja --chat-template-kwargs '{\"reasoning_effort\": \"low\"}' --temp 1.0 --top-p 0.95 --top-k 0 --min-p 0.0 --host 127.0.0.1 --port 8096 -a glm-5.3-flash --no-webui -lv 3",
+ "levels": [
+  {
+   "users": 1,
+   "wall_s": 122.05241298675537,
+   "tokens": 512,
+   "total_tps": 4.194919112787718,
+   "decode_sum_tps": 10.149048005394286,
+   "pp_tps": 150.7058590268847,
+   "prompt_n": 10801,
+   "per_user_tps": 10.149048005394286,
+   "mixups": 0,
+   "errors": 0,
+   "accept": null,
+   "ttft_s": 71.66941
+  }
+ ]
+}

@@ -1,0 +1,15 @@
+{
+ "name": "probe-tkmtp-32k",
+ "preset": "tkmtp-agent",
+ "cmd": "/home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-mtp-hip/bin/llama-server -m /home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ2_XXS.glm5-next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf -ngl 99 -c 32768 -np 1 -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 -t 8 --load-mode none --cache-ram 512 --spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75 --jinja --chat-template-kwargs '{\"reasoning_effort\": \"high\"}' --temp 1.0 --top-p 0.95 --top-k 0 --min-p 0.0 --host 127.0.0.1 --port 8098 -a glm-5.3-flash --metrics --no-webui -lv 3",
+ "estimate_gib": 99.18,
+ "load_s": 79.1,
+ "tg": 17.273853198129707,
+ "pp": 24.930163580227184,
+ "n_gen": 300,
+ "draft_n": 187,
+ "draft_acc": 162,
+ "text_head": "## Zählen von 1 bis 30\n\n1, 2, 3, 4, 5, 6, 7, 8, 9, 10,\n11, 12, 13, 14, 15, 16, 17, 18, 19, 20,\n21, 22, 23, 24, 25, 26, 27, 28, 29, 30.\n\n## Was ist ein KV-Cache? (in 5 Sätzen)\n\nEin KV-Cache (Key-Value-",
+ "guard_exit": 247,
+ "guard_summary": "[memguard] fertig nach 100s: MemAvailable Start 105.0 GiB, Minimum 5.2 GiB (Verbrauch 99.9 GiB), Peak GTT 97.2 GiB, Peak RSS 1.6 GiB, exit -9"
+}

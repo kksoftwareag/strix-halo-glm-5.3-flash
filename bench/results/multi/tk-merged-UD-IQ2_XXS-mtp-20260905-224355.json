@@ -1,0 +1,20 @@
+{
+ "tag": "tk-merged-UD-IQ2_XXS-mtp-20260905-224355",
+ "cmd": "/home/lyra/models/strix-halo-glm-5.3-flash/engine/build-tk-merged-hip/bin/llama-server -m /home/lyra/models/strix-halo-glm-5.3-flash/models/variants/UD-IQ2_XXS.glm5-next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf -ngl 99 -c 16384 -np 1 -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 -t 8 --load-mode none --cache-ram 512 --spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75 --jinja --chat-template-kwargs '{\"reasoning_effort\": \"low\"}' --temp 1.0 --top-p 0.95 --top-k 0 --min-p 0.0 --host 127.0.0.1 --port 8096 -a glm-5.3-flash --no-webui -lv 3",
+ "levels": [
+  {
+   "users": 1,
+   "wall_s": 33.79216933250427,
+   "tokens": 0,
+   "total_tps": 0.0,
+   "decode_sum_tps": 0,
+   "pp_tps": 0,
+   "prompt_n": 0,
+   "per_user_tps": 0,
+   "mixups": 0,
+   "errors": 1,
+   "accept": null,
+   "ttft_s": 0.0
+  }
+ ]
+}
