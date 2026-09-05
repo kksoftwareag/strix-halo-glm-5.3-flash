@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speicher · GLM-5.3-Flash auf Strix Halo</title>
+<meta name="description" content="Dokumentation der Entscheidungen, Messungen und Quellen zum Betrieb von GLM-5.3-Flash mit llama.cpp (MTP) auf AMD Strix Halo.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="index.html">GLM-5.3-Flash auf Strix Halo</a><nav><a href="index.html"%IDX%>Überblick</a><a href="entscheidungen.html"%ENT%>Entscheidungen</a><a href="speicher.html"%SPE%>Speicher</a><a href="benchmarks.html"%BEN%>Messungen</a><a href="terminal-bench.html"%TBM%>Terminal-Bench</a><a href="anleitung.html"%ANL%>Anleitung</a><a href="recherche.html"%REC%>Recherche &amp; Quellen</a><a class="gh" href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub</a></nav></div></header>
+<main><div class="wrap">
+<h1>Speicher</h1>
+<p class="lead">Speichermodell auf Unified Memory, der ungenutzte VRAM-Carve-out, Größe der Quantisierungen und die Schätzung des Programms.</p>
+
+<h2>Speicheraufteilung auf Strix Halo</h2>
+<p>Das Betriebssystem sieht 109,7 GiB; die GPU bekommt 16 GiB fest (BIOS „UMA Frame Buffer“) und darf den Rest als GTT benutzen
+(Kernel-Parameter <code>amdgpu.gttsize=126976 ttm.pages_limit=32505856</code>). Auf einer leeren Maschine sind rund 105 GiB
+<code>MemAvailable</code>.</p>
+<div class="note"><strong>Der 16-GiB-Carve-out liegt brach.</strong> llama.cpp/HIP legt auf gfx1151 alle Puffer in GTT: beim laufenden
+Qwen-Server waren 77 GiB GTT belegt und 0,2 GiB VRAM. Das Log vom 29.08. zeigt dasselbe Bild für GLM. Wer den Carve-out im
+BIOS auf 512 MiB bis 1 GiB stellt, gewinnt rund 15 GiB – der Unterschied zwischen „nur UD-IQ2_XXS“ und „UD-Q2_K_XL,
+Spark-Q2XL-MTP oder AesSedai-IQ2_S mit MTP“. AMD empfiehlt den kleinen Carve-out für Strix Halo.</div>
+
+<h2>Quantisierungen</h2>
+<div class="tablewrap"><table>
+<tr><th>Quant</th><th class="num">Datei</th><th class="num">Experten</th><th class="num">NextN</th><th>Qualität (Angabe des Anbieters)</th><th>16 GiB Carve-out</th><th>1 GiB Carve-out</th></tr>
+<tr><td>aj9o9 AJ-IQ2_XXS</td><td class="num">81,4</td><td class="num">–</td><td class="num">fehlt</td><td>Top-1 73,2 %, KLD 0,71</td><td class="ok">passt</td><td class="ok">passt</td></tr>
+<tr><td>UD-IQ1_S</td><td class="num">86,7</td><td class="num">–</td><td class="num">ja</td><td>71 %</td><td class="ok">passt</td><td class="ok">passt</td></tr>
+<tr><td>UD-IQ1_M</td><td class="num">90,9</td><td class="num">–</td><td class="num">ja</td><td>73 %</td><td class="ok">passt</td><td class="ok">passt</td></tr>
+<tr><td><strong>UD-IQ2_XXS</strong></td><td class="num">94,8</td><td class="num">86,2</td><td class="num">2,6</td><td>76 %</td><td class="ok">passt (knapp mit MTP)</td><td class="ok">passt</td></tr>
+<tr><td>UD-Q2_K_XL</td><td class="num">101,3</td><td class="num">–</td><td class="num">ja</td><td>78 %</td><td class="bad">zu groß mit MTP</td><td class="ok">passt</td></tr>
+<tr><td>Spark-Q2XL-MTP</td><td class="num">104,5</td><td class="num">–</td><td class="num">ja</td><td>HumanEval+ 153/164 (UD-Q2_K_XL: 148)</td><td class="bad">zu groß</td><td class="ok">passt</td></tr>
+<tr><td>aj9o9 AJ-IQ3_XXS</td><td class="num">104,7</td><td class="num">–</td><td class="num">fehlt</td><td>Top-1 81,8 %, KLD 0,36</td><td class="bad">zu groß</td><td class="ok">passt (ohne MTP)</td></tr>
+<tr><td>AesSedai IQ2_S</td><td class="num">105,8</td><td class="num">–</td><td class="num">ja</td><td>KLD 0,375</td><td class="bad">zu groß</td><td class="ok">passt</td></tr>
+<tr><td>UD-IQ3_XXS</td><td class="num">112,1</td><td class="num">–</td><td class="num">ja</td><td>82 %</td><td class="bad">zu groß</td><td class="bad">zu knapp</td></tr>
+</table></div>
+<p>Größen in GiB (HF-API bzw. eigene Header-Analyse). UD-IQ2_XXS: 86,2 GiB davon sind die gerouteten Experten (IQ2_XXS/IQ3_XXS gemischt),
+4,0 GiB Attention und Indexer, 0,7 GiB gemeinsamer Experte, 0,7 GiB Embedding/Output, 2,6 GiB NextN-Layer.
+„Passt“ nach dem Speichermodell unten mit MTP und 128k Kontext; die Spalte für 1 GiB Carve-out rechnet mit 120 GiB Budget.</p>
+
+<h2>Speicherschätzung im Programm</h2>
+<ul>
+<li>Gewichte: Dateigröße minus NextN-Layer; mit MTP plus NextN (2,6 GiB).</li>
+<li>KV-Cache nur für die 11 MLA-Layer: 512 Werte je Token und Layer (kv_lora_rank, keine RoPE-Dimensionen) → 5,5 KiB/Token bei f16,
+5,8 KiB bei q8_0; plus Indexer-Key-Cache (128 Dims f16 plus Gate, bleibt f16) ≈ 2,8 KiB/Token. Der Vorlauf am 29.08. kam auf
+13,9 KiB/Token – die Differenz wird bei der Kalibrierung geklärt.</li>
+<li>KDA-Zustand: 34 Layer × 32 Heads × 128 × 128 Werte f32 ≈ 0,1 GiB je Slot, unabhängig vom Kontext (geschätzt).</li>
+<li>Compute-Puffer: 1,0 GiB bei ubatch 512, 2,5 GiB bei 2048 (geschätzt); Host-Puffer 1,2 GiB; MTP-Draft-Kontext 0,8 GiB;
+Vision-Projektor Dateigröße + 1 GiB.</li>
+<li>Prompt-Cache (<code>--cache-ram</code>) als Obergrenze; Reserve 4 GiB; Wächter bei 5 GiB MemAvailable.</li>
+</ul>
+<p>Beispiel Standard-Preset (tk-mtp, UD-IQ2_XXS, 128k, MTP, ubatch 1024): geschätzt 100,0 GiB – 1 GiB Spielraum bei 105 GiB Budget.
+Die Konstanten werden nach den ersten Footprint-Messungen (<code>bench/mem_probe.py</code>) angepasst.</p>
+
+<h2>Kontextlänge und Slots</h2>
+<p>Weil nur 11 der 45 Layer einen KV-Cache haben, kostet Kontext wenig: 256k Kontext ≈ 2,8 GiB. Die Grenze ist das Prompt-Processing,
+nicht der Speicher. Mehrere Slots brauchen <code>--kv-unified</code>; <code>bench/context_limits.py</code> rechnet vor, wie viele Slots
+welcher Größe je Quant passen – für beide Carve-out-Szenarien (<code>--budget-gib 105</code> bzw. <code>120</code>).</p>
+
+</div></main>
+<footer><div class="wrap">Stand: 5. September 2026 · Vorbereitung auf einem Ryzen AI MAX+ 395 (Radeon 8060S, 128 GB) unter Fedora 44, ROCm/HIP 7.1 · Messungen ausstehend · Projekt: <a href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash">kksoftwareag/strix-halo-glm-5.3-flash</a> · Diese Seiten liegen im Ordner <code>docs/</code> des Projekts</div></footer>
+</body>
+</html>

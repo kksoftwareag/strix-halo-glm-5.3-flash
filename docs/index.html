@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Überblick · GLM-5.3-Flash auf Strix Halo</title>
+<meta name="description" content="Dokumentation der Entscheidungen, Messungen und Quellen zum Betrieb von GLM-5.3-Flash mit llama.cpp (MTP) auf AMD Strix Halo.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="index.html">GLM-5.3-Flash auf Strix Halo</a><nav><a href="index.html"%IDX%>Überblick</a><a href="entscheidungen.html"%ENT%>Entscheidungen</a><a href="speicher.html"%SPE%>Speicher</a><a href="benchmarks.html"%BEN%>Messungen</a><a href="terminal-bench.html"%TBM%>Terminal-Bench</a><a href="anleitung.html"%ANL%>Anleitung</a><a href="recherche.html"%REC%>Recherche &amp; Quellen</a><a class="gh" href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub</a></nav></div></header>
+<main><div class="wrap">
+<h1>Überblick</h1>
+<p class="lead">Dokumentation zum Betrieb von GLM-5.3-Flash (320 B Parameter, 18 B aktiv, MTP, Vision) mit llama.cpp auf AMD Strix Halo
+(128 GB Unified Memory): welche llama.cpp-Branches kombiniert werden, welcher Quant passt, wie der Speicher geschützt wird –
+und die Messreihen, sobald sie gelaufen sind.</p>
+
+<div class="cards">
+<div class="card"><h3>Empfohlene Konfiguration (vorläufig)</h3><div class="big">UD-IQ2_XXS + MTP</div><div class="sub">PR #27917 auf #27773 (timkhronos), 128k Kontext, KV q8_0, Draft-Tiefe 2 – <span class="warn">ungemessen</span></div></div>
+<div class="card"><h3>Speicher</h3><div class="big">~100 GB</div><div class="sub">von 105 GB nutzbar; 16 GB BIOS-VRAM-Carve-out liegen brach, siehe Speicher</div></div>
+<div class="card"><h3>Vorlauf vom 29.08.</h3><div class="big">14 t/s</div><div class="sub">UD-IQ2_XXS, unsloth-Fork ohne HIP-Top-k-Fix, ohne MTP; fiel bei 42k Tiefe auf 7 t/s</div></div>
+</div>
+
+<h2>Einführung</h2>
+<p>GLM-5.3-Flash ist ein hybrides Modell: 34 Layer lineare Attention (KDA, rekurrenter Zustand) und 11 Layer Sparse-Attention
+mit einem Indexer, der je Token die 2048 wichtigsten Kontext-Pools auswählt, dazu 288 Experten (8 aktiv) und ein
+eingebauter Draft-Layer für spekulatives Decoding (MTP). Nichts davon ist in llama.cpp gemerged; es gibt drei konkurrierende
+Pull-Requests mit zwei verschiedenen Namensschemata für die GGUF-Dateien und einen separaten MTP-PR. Diese Seiten dokumentieren,
+welche Kombination gewählt wurde, warum, und was auf dieser Maschine gemessen wird.</p>
+
+<h2>Zusammenfassung</h2>
+<ol>
+<li><strong>Engine:</strong> PR #27773 (timkhronos, von zwei Maintainern approved) plus PR #27917 (MTP) als Hauptkandidat; der
+unsloth-Branch #27754 (ebenfalls mit MTP) als Vergleich; dazu ein eigener Merge von #27917 auf den aktuellen #27773-Stand.
+<a href="entscheidungen.html#engine">Entscheidung</a></li>
+<li><strong>GGUF-Schema:</strong> Die unsloth-Dateien liegen im Schema <code>glm5next</code>; #27773 erwartet <code>glm5-next</code>.
+Nur Shard 1 (9 MB) unterscheidet sich; das Programm legt je Schema einen Shard-Satz an. <a href="entscheidungen.html#schema">Entscheidung</a></li>
+<li><strong>Quant:</strong> UD-IQ2_XXS (95 GB) ist der beste unsloth-Quant, der mit MTP in den Speicher passt, solange der
+BIOS-VRAM-Carve-out 16 GB beträgt. Mit 1 GB Carve-out passen UD-Q2_K_XL und zwei Community-Quants mit 2,8 bpw. <a href="speicher.html">Speicher</a></li>
+<li><strong>HIP-Fix:</strong> Der Radix-Top-k für lange Zeilen (#27466, seit 31.08. in master) steckt in allen drei Kandidaten
+und fehlt in dem Fork, der am 29.08. bei Tiefe einbrach. <a href="entscheidungen.html#backend">Entscheidung</a></li>
+<li><strong>MTP:</strong> Akzeptanz laut PR 0,74; Draft-Tiefe 2 bis 3 auf bandbreitenlimitierter Hardware. Auf GPUs mit
+allem im VRAM war MTP langsamer – ob Strix Halo profitiert, entscheidet die Messung. <a href="benchmarks.html#mtp">Messungen</a></li>
+<li><strong>Speicherschutz:</strong> Speicherbilanz vor dem Start, Wächter im Betrieb; Downloads und Builds laufen in
+cgroups mit Speicherdeckel, damit ein parallel laufender Server nicht verdrängt wird. <a href="entscheidungen.html#guard">Entscheidung</a></li>
+</ol>
+
+<h2>Status</h2>
+<div class="note">Stand 5. September 2026: Recherche, Engines (vier HIP-Builds), Modellvarianten, Speicherschätzung, Start-Presets,
+Bench- und Qualitäts-Skripte sowie diese Dokumentation sind vorbereitet. <strong>Es wurde noch kein llama.cpp gestartet</strong>,
+weil auf der Maschine ein anderer Server lief. Die Messreihen folgen nach Freigabe; Reihenfolge in <code>bench/README.md</code>.</div>
+
+</div></main>
+<footer><div class="wrap">Stand: 5. September 2026 · Vorbereitung auf einem Ryzen AI MAX+ 395 (Radeon 8060S, 128 GB) unter Fedora 44, ROCm/HIP 7.1 · Messungen ausstehend · Projekt: <a href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash">kksoftwareag/strix-halo-glm-5.3-flash</a> · Diese Seiten liegen im Ordner <code>docs/</code> des Projekts</div></footer>
+</body>
+</html>

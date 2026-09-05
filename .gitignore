@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+state/
+engine/src/
+engine/src-*/
+engine/build-*/
+engine/*.log
+models/variants/
+bench/results/mem/*.csv
+bench/results/mem/*.log
+bench/results/raw/*.err
+bench/quality/terminal-bench-mini/

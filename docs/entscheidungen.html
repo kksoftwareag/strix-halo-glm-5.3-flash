@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entscheidungen · GLM-5.3-Flash auf Strix Halo</title>
+<meta name="description" content="Dokumentation der Entscheidungen, Messungen und Quellen zum Betrieb von GLM-5.3-Flash mit llama.cpp (MTP) auf AMD Strix Halo.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="index.html">GLM-5.3-Flash auf Strix Halo</a><nav><a href="index.html"%IDX%>Überblick</a><a href="entscheidungen.html"%ENT%>Entscheidungen</a><a href="speicher.html"%SPE%>Speicher</a><a href="benchmarks.html"%BEN%>Messungen</a><a href="terminal-bench.html"%TBM%>Terminal-Bench</a><a href="anleitung.html"%ANL%>Anleitung</a><a href="recherche.html"%REC%>Recherche &amp; Quellen</a><a class="gh" href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub</a></nav></div></header>
+<main><div class="wrap">
+<h1>Entscheidungen</h1>
+<p class="lead">Konfigurationsentscheidungen mit Begründung, Beleg und verworfenen Alternativen. Stand: vor den Messungen –
+Entscheidungen, die von Messwerten abhängen, sind als vorläufig markiert.</p>
+
+<div class="decision" id="engine"><h3>Engine: PR #27773 + PR #27917 (timkhronos), unsloth #27754 als Vergleich</h3><dl>
+<dt>Entscheidung</dt><dd><strong>Vier HIP-Builds: <code>tk-mtp</code> (#27917 auf #27773, Stand 02.09.), <code>unsloth</code> (#27754 mit MTP, 04.09.),
+<code>tk</code> (#27773-HEAD 04.09., ohne MTP) und <code>tk-merged</code> (#27917 auf den #27773-HEAD gemergt, experimentell). Hauptkandidat: <code>tk-mtp</code>.</strong></dd>
+<dt>Begründung</dt><dd>#27773 ist der Branch, auf den upstream zusteuert (approved von CISC und ngxson), hat den Pooled-Index-Cache (Decode
+bleibt mit der Tiefe konstant: 25,3 → 23,7 t/s bei 29k, während #27754 auf 14,6 fiel), korrektes und speicherflaches <code>-fa on</code>,
+Vision und Multi-Stream. #27917 liefert dazu den NextN-Draft ohne separates Draft-GGUF. Der unsloth-Branch ist die einzige
+zweite Implementierung mit MTP und läuft mit den Original-Dateien; er baut den Graph aber jeden Token neu (~7 % Verlust).</dd>
+<dt>Beleg</dt><dd>PR-Diskussionen #27773/#27917/#27754 (nicholasshirley, borakilo, noonghunna), GitHub-API-Stände vom 05.09., eigene
+Git-Prüfung der Branches (<code>engine/patches/PINNED.env</code>).</dd>
+<dt>Verworfen</dt><dd>vcruz305-Fork (Basis des Versuchs vom 29.08.): 180 Commits hinter master, ohne den HIP-Top-k-Fix. eauchs #27752: textonly, kein MTP.</dd>
+</dl></div>
+
+<div class="decision" id="schema"><h3>GGUF-Schema: je Engine ein eigener Shard-Satz</h3><dl>
+<dt>Entscheidung</dt><dd><strong>Das Programm legt unter <code>models/variants/</code> je Quant zwei Ordner an: <code>*.glm5next</code> (Original-Shard 1,
+unsloth-Engine) und <code>*.glm5-next</code> (Shard 1 aus unsloths <code>Shard_Rewrite/</code> oder vom eigenen Umschreiber; timkhronos-Engines).
+Shards 2 bis n sind Symlinks.</strong></dd>
+<dt>Begründung</dt><dd>Nur Shard 1 (Metadaten, Vokabular, keine Tensoren) unterscheidet sich: Architekturname, Schlüsselpräfix und ein
+zusätzlicher Schlüssel <code>attention.indexer.index_share_mtp</code>. Kein Quant muss doppelt auf der Platte liegen.</dd>
+<dt>Beleg</dt><dd>Eigene GGUF-Header-Analyse beider Shard-1-Dateien; der eigene Umschreiber erzeugt byteidentische Metadaten zum
+unsloth-Shard_Rewrite (Test in <code>tests/test_gguf.py</code>). Die Meldung „head_count_kv: expected 45, got 46“ ist seit #28173 behoben.</dd>
+</dl></div>
+
+<div class="decision" id="quant"><h3>Quantisierung: UD-IQ2_XXS (vorläufig), Alternativen abhängig vom BIOS-Carve-out</h3><dl>
+<dt>Entscheidung</dt><dd><strong>Standard-Preset UD-IQ2_XXS (94,8 GiB, unsloth „76 % Accuracy“). Kandidaten für den Qualitätsvergleich: UD-IQ1_S (86,7 GiB),
+und – nur mit kleinem Carve-out – UD-Q2_K_XL (101,3), Spark-Q2XL-MTP (104,5, 2,80 bpw) und AesSedai IQ2_S (105,8).</strong></dd>
+<dt>Begründung</dt><dd>Mit 16 GiB Carve-out sind rund 105 GiB nutzbar; UD-IQ2_XXS mit MTP braucht laut Schätzung ~100 GiB. Alles darüber passt
+nur, wenn das BIOS den Carve-out freigibt. Die 1-Bit-Quants sind kaum kleiner (IQ1_M 90,9 GiB) und deutlich schlechter.</dd>
+<dt>Beleg</dt><dd>HF-Dateigrößen, unsloth-Accuracy-Tabelle, AesSedai-KLD-Tabelle, aj9o9-Vergleich, eigener Lauf vom 29.08. (~12 GiB frei bei 131k ohne MTP).</dd>
+<dt>Verworfen</dt><dd>UD-IQ3_XXS (112 GiB): passt auch mit kleinem Carve-out nicht. AJ-IQ3_XXS/AJ-IQ2_XXS: NextN entfernt, kein MTP.</dd>
+</dl></div>
+
+<div class="decision" id="backend"><h3>Backend: ROCm/HIP mit Radix-Top-k</h3><dl>
+<dt>Entscheidung</dt><dd><strong>HIP-Builds für gfx1151; Vulkan vorbereitet, aber ungebaut (Pakete fehlen).</strong></dd>
+<dt>Begründung</dt><dd>Der Indexer sortiert je Token in 11 Layern die Top-2048 aus Kontext/4 Pool-Zeilen. Auf HIP fiel <code>ggml_top_k</code> ab 1024 Zeilen
+bisher auf die CPU zurück – das ist die wahrscheinliche Ursache für den Einbruch von 14 auf 7 t/s bei 42k Tiefe am 29.08. Der Fix
+(#27466, Radix-Top-k, 31.08.) ist in allen drei Kandidaten enthalten. Im Qwen-Projekt verlor Vulkan mit MTP deutlich.</dd>
+<dt>Beleg</dt><dd>Discussion #27950, PR #27466; eigene <code>git merge-base</code>-Prüfung; Log vom 29.08.</dd>
+<dt>Offen</dt><dd>Messung bei Tiefe 0/8k/32k (<code>bench/llama_bench.sh</code>). Vulkan als Vergleich, sobald glslc/Header installiert sind.</dd>
+</dl></div>
+
+<div class="decision" id="mtp"><h3>MTP: an, Draft-Tiefe 2 (vorläufig)</h3><dl>
+<dt>Entscheidung</dt><dd><strong><code>--spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75</code> in den Einzelnutzer-Presets; Mehrnutzer ohne MTP.</strong></dd>
+<dt>Begründung</dt><dd>Akzeptanz je Position 0,92/0,81/0,60/0,44/0,35 (PR #27917) – ab Position 3 lohnt der Draft kaum. unsloth nennt n = 2 als
+Optimum. Auf 4×Ampere mit allem im VRAM war MTP langsamer als ohne; Strix Halo ist bandbreitenlimitiert, dort hat MTP beim
+Qwen-Modell 21 → 35 t/s gebracht.</dd>
+<dt>Beleg</dt><dd>PR #27917, borakilo-Messung, unsloth-Doku; Qwen-Projekt (gleiche Maschine).</dd>
+<dt>Offen</dt><dd><code>bench/mtp_sweep.py</code>: n 1–4, p_min, Temperatur, ngram-mod, je Engine.</dd>
+</dl></div>
+
+<div class="decision" id="kv"><h3>KV-Cache q8_0, Flash-Attention an, ubatch 1024</h3><dl>
+<dt>Entscheidung</dt><dd><strong><code>-fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 --load-mode none --cache-ram 512</code>.</strong></dd>
+<dt>Begründung</dt><dd>Bei #27773 ist <code>-fa on</code> korrekt (Needle-Tests bis 92k, Agentensitzung bis 160k) und hält den Compute-Puffer flach;
+<code>-fa off</code> war auf CUDA bei 131k 6,4× langsamer. Der Indexer-Key-Cache bleibt ohnehin f16. <code>mmap+mlock</code> stürzte bei
+langen Generierungen ab, <code>none</code> lief bis 322k. Der Prompt-Cache-Default (8 GiB) kostete auf einem 128-GB-System die Reserve.</dd>
+<dt>Beleg</dt><dd>#27773-Kommentare (nicholasshirley), #27754-Kommentare (Suaroman), HF-Diskussion #4 (Deniz-Eren), Spark-README.</dd>
+</dl></div>
+
+<div class="decision" id="thinking"><h3>Thinking: reasoning_effort „high“</h3><dl>
+<dt>Entscheidung</dt><dd><strong>Presets setzen <code>high</code>; <code>max</code> (Template-Default) und <code>low</code> per <code>--reasoning</code>.</strong></dd>
+<dt>Begründung</dt><dd>Das Template kennt nur <code>low</code> und <code>high</code>; jeder andere Wert – auch <code>medium</code> aus dem Qwen-Projekt – wird still zu
+<code>max</code>. Das Programm lehnt ungültige Werte ab.</dd>
+<dt>Beleg</dt><dd>Chat-Template aus dem GGUF gelesen (<code>./run.sh gguf-info</code>).</dd>
+</dl></div>
+
+<div class="decision" id="multislot"><h3>Mehrnutzer: --kv-unified und Patch #25992</h3><dl>
+<dt>Entscheidung</dt><dd><strong>Mehrere Slots nur mit <code>--kv-unified</code> (Pflicht auf #27773) und ohne MTP; der iGPU-Host-Puffer-Workaround (Patch 0002) ist in allen Builds.</strong></dd>
+<dt>Begründung</dt><dd>Ohne den Patch lieferte gfx1151 im Qwen-Projekt vertauschte Antworten zwischen Slots. Der Mehrnutzer-Benchmark prüft das mit Codewörtern.</dd>
+</dl></div>
+
+<div class="decision" id="guard"><h3>Speicherschutz – auch während der Vorbereitung</h3><dl>
+<dt>Entscheidung</dt><dd><strong>Speicherbilanz vor dem Start, Wächter (<code>memguard.py</code>, SIGKILL bei 5 GiB) im Betrieb. Downloads und Builds laufen über
+<code>tools/guarded.sh</code>: eigene cgroup mit Speicherdeckel, nice/ionice, automatische Pause bei knappem MemAvailable.</strong></dd>
+<dt>Begründung</dt><dd>GTT taucht nicht im RSS auf; nur MemAvailable zeigt die Nähe zum OOM. Während der Vorbereitung lief ein anderer Server mit 88 GiB;
+der Page-Cache von 100-GB-Downloads und die Compiler-Prozesse eines HIP-Builds dürfen ihn nicht verdrängen. Die cgroup holt
+ihren eigenen Page-Cache zurück, bevor der Kernel beim Nachbarn sucht.</dd>
+<dt>Beleg</dt><dd>Qwen-Projekt (zwei Kernel-OOM-Kills); Beobachtung MemAvailable während Build und Download (stabil 16–21 GiB).</dd>
+</dl></div>
+
+</div></main>
+<footer><div class="wrap">Stand: 5. September 2026 · Vorbereitung auf einem Ryzen AI MAX+ 395 (Radeon 8060S, 128 GB) unter Fedora 44, ROCm/HIP 7.1 · Messungen ausstehend · Projekt: <a href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash">kksoftwareag/strix-halo-glm-5.3-flash</a> · Diese Seiten liegen im Ordner <code>docs/</code> des Projekts</div></footer>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anleitung · GLM-5.3-Flash auf Strix Halo</title>
+<meta name="description" content="Dokumentation der Entscheidungen, Messungen und Quellen zum Betrieb von GLM-5.3-Flash mit llama.cpp (MTP) auf AMD Strix Halo.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="index.html">GLM-5.3-Flash auf Strix Halo</a><nav><a href="index.html">Überblick</a><a href="entscheidungen.html">Entscheidungen</a><a href="speicher.html">Speicher</a><a href="benchmarks.html">Messungen</a><a href="terminal-bench.html">Terminal-Bench</a><a href="anleitung.html" aria-current="page">Anleitung</a><a href="recherche.html">Recherche &amp; Quellen</a><a class="gh" href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub</a></nav></div></header>
+<main><div class="wrap">
+<h1>Anleitung</h1>
+<p class="lead">Installation, Modell-Download, Build der Engines, Start des Servers – und was vor dem ersten Start zu prüfen ist.</p>
+
+<h2>Voraussetzungen</h2>
+<ul>
+<li>AMD Strix Halo (gfx1151) mit 128 GB, Linux mit ROCm/HIP 7.x (<code>hipcc</code>, <code>/usr/lib64/rocm/llvm/bin/clang++</code>), <code>cmake</code>, <code>ninja</code>, <code>git</code>.</li>
+<li>Kernel-Parameter <code>amd_iommu=off amdgpu.gttsize=126976 ttm.pages_limit=32505856</code>.</li>
+<li>Python 3.12+ (nur Standardbibliothek), <a href="https://docs.astral.sh/uv/">uv</a> für die Tests, die Hugging-Face-CLI <code>hf</code>, rund 300 GB freier NVMe-Platz.</li>
+<li>Empfohlen: BIOS „UMA Frame Buffer Size“ auf 512 MiB–1 GiB (siehe <a href="speicher.html">Speicher</a>).</li>
+</ul>
+
+<h2>Installation</h2>
+<pre><code># 1. Projekt
+git clone https://github.com/kksoftwareag/strix-halo-glm-5.3-flash glm53-flash &amp;&amp; cd glm53-flash
+
+# 2. Modelle (speicherschonend in einer cgroup; ~95 GB je Quant)
+models/fetch.sh iq2xxs        # UD-IQ2_XXS + Shard_Rewrite-Header
+models/fetch.sh standard      # zusätzlich UD-Q2_K_XL und die Vision-Projektoren
+./run.sh variants --create    # Shard-Sätze je Namensschema (glm5next / glm5-next)
+
+# 3. Engines (vier HIP-Builds, je ~6 Minuten mit -j4; laufen gedrosselt)
+engine/fetch.sh               # llama.cpp + Branches an den festgehaltenen Commits, Patches
+engine/build.sh all hip       # oder: nohup engine/build-all.sh &amp;
+
+# 4. Prüfen und starten
+./run.sh models               # was gefunden wurde
+./run.sh show --preset tkmtp-agent     # Speicherbilanz und Kommandozeile
+./serve.sh --preset tkmtp-agent        # Server unter dem Speicher-Wächter
+</code></pre>
+
+<h2>Presets</h2>
+<div class="tablewrap"><table>
+<tr><th>Preset</th><th>Engine</th><th>Quant</th><th>Kontext</th><th>MTP</th><th>Zweck</th></tr>
+<tr><td>tkmtp-agent (Standard)</td><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>131072</td><td>n2</td><td>Agenten, ein Nutzer</td></tr>
+<tr><td>tkmtp-agent-n3</td><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>131072</td><td>n3</td><td>Vergleich der Draft-Tiefe</td></tr>
+<tr><td>merged-agent</td><td>tk-merged</td><td>UD-IQ2_XXS</td><td>131072</td><td>n2</td><td>experimentell: neueste Basis + MTP</td></tr>
+<tr><td>unsloth-agent</td><td>unsloth</td><td>UD-IQ2_XXS</td><td>131072</td><td>n2</td><td>A/B-Vergleich</td></tr>
+<tr><td>tk-plain</td><td>tk</td><td>UD-IQ2_XXS</td><td>131072</td><td>aus</td><td>Basislinie</td></tr>
+<tr><td>chat-vision</td><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>65536</td><td>n2</td><td>Chat mit Bildern, Web-UI</td></tr>
+<tr><td>chat-fast</td><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>32768</td><td>n2 + ngram</td><td>schneller Chat, reasoning low</td></tr>
+<tr><td>multiuser-4</td><td>tk</td><td>UD-IQ2_XXS</td><td>4 × 65536</td><td>aus</td><td>mehrere Nutzer</td></tr>
+<tr><td>q2kxl-agent</td><td>tk-mtp</td><td>UD-Q2_K_XL</td><td>131072</td><td>n2</td><td>nur mit kleinem Carve-out</td></tr>
+<tr><td>spark-agent</td><td>unsloth</td><td>Spark-Q2XL-MTP</td><td>131072</td><td>n2</td><td>nur mit kleinem Carve-out</td></tr>
+</table></div>
+<p>Overrides: <code>--quant</code>, <code>--engine</code>, <code>--ctx</code>, <code>--np</code>, <code>--mtp/--no-mtp</code>, <code>--spec-n</code>, <code>--reasoning low|high|max</code>,
+<code>--ub</code>, <code>--host</code>, <code>--port</code>, <code>--vision</code>, <code>--env KEY=VALUE</code>, <code>--extra "…"</code>, <code>--budget-gib</code> (Planung, während ein anderer Server läuft),
+<code>--save-profile NAME</code>.</p>
+
+<h2>Empfohlene Kommandozeile (ohne Programm)</h2>
+<pre><code>engine/build-tk-mtp-hip/bin/llama-server \
+  -m models/variants/UD-IQ2_XXS.glm5-next/GLM-5.3-Flash-UD-IQ2_XXS-00001-of-00004.gguf \
+  -ngl 99 -c 131072 -np 1 -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 1024 -t 8 \
+  --load-mode none --cache-ram 512 \
+  --spec-type draft-mtp --spec-draft-n-max 2 --spec-draft-p-min 0.75 \
+  --jinja --chat-template-kwargs '{"reasoning_effort": "high"}' \
+  --temp 1.0 --top-p 0.95 --top-k 0 --min-p 0 \
+  --host 0.0.0.0 --port 8080 -a glm-5.3-flash --metrics</code></pre>
+<p>Für die unsloth-Engine denselben Aufruf mit <code>engine/build-unsloth-hip/bin/llama-server</code> und dem Shard-Satz
+<code>models/variants/UD-IQ2_XXS.glm5next/</code>. Mehrere Nutzer: <code>-np N --kv-unified</code>, MTP-Zeile weglassen. Vision:
+<code>--mmproj</code> mit dem AesSedai-Projektor (glm5-next) bzw. dem unsloth-Projektor (glm5next).</p>
+
+<h2>Vor dem ersten Start prüfen</h2>
+<ol>
+<li><code>free -g</code>: läuft ein anderer Server? Das Programm prüft nur MemAvailable, nicht den Nachbarn.</li>
+<li><code>./run.sh show --preset …</code>: Bewertung „passt“ oder „knapp“; bei „zu groß“ Kontext oder Quant ändern.</li>
+<li>Erster Lauf immer über <code>bench/mem_probe.py</code> (eine Anfrage, dann Ende): Puffergrößen und Footprint ins Speichermodell übernehmen.</li>
+<li>Dann <code>./serve.sh</code>. Der Server ist unter <code>http://&lt;host&gt;:8080/v1</code> erreichbar (OpenAI-kompatibel).</li>
+</ol>
+
+<h2>Werkzeuge</h2>
+<ul>
+<li><code>./run.sh gguf-info DATEI [--stats]</code>: Architektur, Schlüssel, Chat-Template-Optionen, Größen nach Kategorie.</li>
+<li><code>./run.sh rename-shard1 SRC DST --arch glm5-next</code>: Shard-1-Header umschreiben (für Quants ohne Shard_Rewrite).</li>
+<li><code>tools/guarded.sh -- CMD</code>: Kommando in einer cgroup mit Speicherdeckel und Pause bei knappem RAM.</li>
+<li><code>uv run --group dev pytest -q</code>: Tests (GGUF-Umschreiber, Speichermodell, Presets).</li>
+</ul>
+
+</div></main>
+<footer><div class="wrap">Stand: 5. September 2026 · Vorbereitung auf einem Ryzen AI MAX+ 395 (Radeon 8060S, 128 GB) unter Fedora 44, ROCm/HIP 7.1 · Messungen ausstehend · Projekt: <a href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash">kksoftwareag/strix-halo-glm-5.3-flash</a> · Diese Seiten liegen im Ordner <code>docs/</code> des Projekts</div></footer>
+</body>
+</html>

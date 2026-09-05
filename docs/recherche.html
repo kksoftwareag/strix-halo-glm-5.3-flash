@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recherche & Quellen · GLM-5.3-Flash auf Strix Halo</title>
+<meta name="description" content="Dokumentation der Entscheidungen, Messungen und Quellen zum Betrieb von GLM-5.3-Flash mit llama.cpp (MTP) auf AMD Strix Halo.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="index.html">GLM-5.3-Flash auf Strix Halo</a><nav><a href="index.html">Überblick</a><a href="entscheidungen.html">Entscheidungen</a><a href="speicher.html">Speicher</a><a href="benchmarks.html">Messungen</a><a href="terminal-bench.html">Terminal-Bench</a><a href="anleitung.html">Anleitung</a><a href="recherche.html" aria-current="page">Recherche &amp; Quellen</a><a class="gh" href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub</a></nav></div></header>
+<main><div class="wrap">
+<h1>Recherche &amp; Quellen</h1>
+<p class="lead">Vorgehen, Modellfakten, Stand der llama.cpp-Unterstützung, Alternativen, offene Punkte und Quellenverzeichnis. Die Langfassung
+mit allen Zahlen steht in <a href="RESEARCH.md"><code>docs/RESEARCH.md</code></a>.</p>
+
+<h2>Vorgehen</h2>
+<p>Modellkarte und GGUF-Header (Architektur, Chat-Template), unsloth-Dokumentation und HF-Diskussionen, die vier llama.cpp-Pull-Requests
+samt Kommentaren (per GitHub-API auf Stand 05.09. geprüft), Community-Quants (Größen per HF-API, KLD-Tabellen), Strix-Halo-Berichte
+(Discussion #27950, Forks, Blogs) und das Qwen3.8-Projekt auf derselben Maschine. Jede Branch-Aussage wurde lokal im Git-Klon geprüft
+(enthaltene Fixes, Namensschemata, Merge-Konflikte), jede GGUF-Aussage am Header der Datei.</p>
+
+<h2>Modell</h2>
+<ul>
+<li>320 B Parameter, 18 B aktiv; 45 Layer (34 KDA linear, 11 DSA/MLA) plus NextN-Layer; 288 Experten, 8 aktiv + 1 gemeinsamer; Indexer Top-2048 über 4er-Pools; Kontext 1 M.</li>
+<li>Chat-Template: <code>reasoning_effort</code> low | high | max (Default max; alles andere wird max), <code>enable_thinking</code>, <code>clear_thinking</code>; Tool-Calls als XML.</li>
+<li>Sampling: temp 1.0, top_p 0.95.</li>
+</ul>
+
+<h2>llama.cpp-Stand (05.09.2026)</h2>
+<ul>
+<li><strong>#27773</strong> timkhronos (glm5-next): approved von CISC und ngxson, Review von ggerganov angefragt; Vision, Multi-Stream, Sparse-FA-Prefill; kein MTP.</li>
+<li><strong>#27917</strong> timkhronos (MTP): Draft, baut auf #27773 vom 01.09.; NextN im Haupt-GGUF; Akzeptanz 0,74.</li>
+<li><strong>#27754</strong> unsloth (glm5next): MTP seit 30.08.; Graph-Neubau je Token; Metal-Kollaps war ein Metal-Bug.</li>
+<li>#27752 eauchs: textonly. HIP-Radix-Top-k #27466 gemerged (31.08.). #28173 (Arrays mit n_layer_all) gemerged (01.09.).</li>
+</ul>
+
+<h2>Alternativen zu llama.cpp</h2>
+<p>Keine läuft mit diesem Modell auf einem einzelnen Strix Halo: vLLM/SGLang ohne gfx1151, ik_llama.cpp ohne GLM-5.3-Flash und ohne ROCm.
+Interessant als Ergänzung: DFlash2-Drafter (Inco AI) für spekulatives Decoding – in llama.cpp master vorhanden, mit den GLM-Branches ungetestet, Lizenz CC BY-NC-ND.</p>
+
+<h2>Qualitäts-Benchmarks</h2>
+<p>Terminal-Bench-Mini-20 wie im Qwen-Projekt (<a href="terminal-bench.html">Terminal-Bench</a>); Alternativen und Aufwand in
+<a href="QUALITAETS-BENCHMARKS.md"><code>docs/QUALITAETS-BENCHMARKS.md</code></a>.</p>
+
+<h2>Offene Punkte</h2>
+<ul>
+<li>Baut und funktioniert der eigene Merge <code>tk-merged</code>? Ausgabenvergleich mit <code>tk-mtp</code>.</li>
+<li>Decode über die Tiefe auf HIP mit #27466; MTP-Nutzen auf Strix Halo; Graph-Reuse.</li>
+<li>BIOS-Carve-out verkleinern → UD-Q2_K_XL, Spark-Q2XL-MTP, AesSedai-IQ2_S messen.</li>
+<li>Vulkan-Build (Pakete fehlen), <code>ROCBLAS_USE_HIPBLASLT=1</code>, <code>GGML_CUDA_DISABLE_GRAPHS=1</code>.</li>
+</ul>
+
+<h2>Quellen</h2>
+<ol>
+<li><a href="https://huggingface.co/zai-org/GLM-5.3-Flash">GLM-5.3-Flash Modellkarte</a></li>
+<li><a href="https://unsloth.ai/docs/models/glm-5.3-flash">unsloth: GLM-5.3-Flash lokal</a>, <a href="https://huggingface.co/unsloth/GLM-5.3-Flash-GGUF">GGUF-Repo</a>, <a href="https://huggingface.co/unsloth/GLM-5.3-Flash-GGUF/discussions/4">Diskussion #4</a></li>
+<li><a href="https://github.com/ggml-org/llama.cpp/pull/27773">PR #27773</a>, <a href="https://github.com/ggml-org/llama.cpp/pull/27917">PR #27917 (MTP)</a>, <a href="https://github.com/ggml-org/llama.cpp/pull/27754">PR #27754 (unsloth)</a>, <a href="https://github.com/ggml-org/llama.cpp/pull/27752">PR #27752</a>, <a href="https://github.com/ggml-org/llama.cpp/discussions/28203">Discussion #28203</a></li>
+<li><a href="https://github.com/ggml-org/llama.cpp/pull/27466">PR #27466 (ROCm Radix-Top-k)</a>, <a href="https://github.com/ggml-org/llama.cpp/pull/26592">PR #26592 (hipCUB)</a>, <a href="https://github.com/ggml-org/llama.cpp/pull/28173">PR #28173</a>, <a href="https://github.com/ggml-org/llama.cpp/pull/28210">PR #28210 (Metal)</a>, <a href="https://github.com/ggml-org/llama.cpp/issues/25992">#25992</a></li>
+<li><a href="https://github.com/ggml-org/llama.cpp/discussions/27950">Discussion #27950: Qwen3.8 auf Strix Halo, Top-k-Fallback</a></li>
+<li><a href="https://github.com/vcruz305/llama.cpp">vcruz305/llama.cpp</a>, <a href="https://huggingface.co/vcruz305/GLM-5.3-Flash-GGUF">vcruz305 GGUFs</a></li>
+<li><a href="https://huggingface.co/sayyidfareed/GLM-5.3-Flash-Spark-Q2XL-MTP">Spark-Q2XL-MTP</a>, <a href="https://huggingface.co/AesSedai/GLM-5.3-Flash-GGUF">AesSedai</a>, <a href="https://huggingface.co/aj9o9/GLM-5.3-Flash-GGUF">aj9o9</a>, <a href="https://huggingface.co/avar6/GLM-5.3-Flash-BF16-gguf">avar6</a></li>
+<li><a href="https://huggingface.co/Anbeeld/GLM-5.3-Flash-DFlash2-GGUF">DFlash2-Drafter</a>, <a href="https://github.com/ggml-org/llama.cpp/pull/27342">PR #27342</a></li>
+<li><a href="https://github.com/Nathanw1014/strix-halo-llamacpp">Nathanw1014/strix-halo-llamacpp</a>, <a href="https://github.com/kyuz0/amd-strix-halo-toolboxes">kyuz0 Toolboxes</a>, <a href="https://www.soothill.io/blog/2026/08/27/qwen38-flash-next-rocm-vulkan-strix-halo/">soothill.io ROCm vs. Vulkan</a>, <a href="https://github.com/LucRoot/Strix-Halo-Linux-Llama_cpp-ROCm">LucRoot ROCm-Rezept</a></li>
+<li><a href="https://rocmdocs.amd.com/en/develop/how-to/system-optimization/strixhalo.html">AMD Strix-Halo-Systemoptimierung</a></li>
+<li><a href="https://github.com/kksoftwareag/strix-halo-qwen-3.8-flash-next">Qwen3.8-Flash-Next-Projekt (gleiche Maschine)</a></li>
+</ol>
+
+</div></main>
+<footer><div class="wrap">Stand: 5. September 2026 · Vorbereitung auf einem Ryzen AI MAX+ 395 (Radeon 8060S, 128 GB) unter Fedora 44, ROCm/HIP 7.1 · Messungen ausstehend · Projekt: <a href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash">kksoftwareag/strix-halo-glm-5.3-flash</a> · Diese Seiten liegen im Ordner <code>docs/</code> des Projekts</div></footer>
+</body>
+</html>

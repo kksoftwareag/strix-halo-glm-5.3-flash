@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Messungen · GLM-5.3-Flash auf Strix Halo</title>
+<meta name="description" content="Dokumentation der Entscheidungen, Messungen und Quellen zum Betrieb von GLM-5.3-Flash mit llama.cpp (MTP) auf AMD Strix Halo.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="wrap"><a class="brand" href="index.html">GLM-5.3-Flash auf Strix Halo</a><nav><a href="index.html">Überblick</a><a href="entscheidungen.html">Entscheidungen</a><a href="speicher.html">Speicher</a><a href="benchmarks.html" aria-current="page">Messungen</a><a href="terminal-bench.html">Terminal-Bench</a><a href="anleitung.html">Anleitung</a><a href="recherche.html">Recherche &amp; Quellen</a><a class="gh" href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash" rel="noopener"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub</a></nav></div></header>
+<main><div class="wrap">
+<h1>Messungen</h1>
+<p class="lead">Durchsatz, Speicherbedarf, MTP-Parameter und Mehrnutzer-Betrieb. <span class="warn">Noch keine eigenen Messwerte</span> –
+diese Seite zeigt den Messplan und die Vergleichswerte aus der Community; die Tabellen werden nach den Läufen gefüllt.</p>
+
+<p>Messbedingungen (geplant): Ryzen AI MAX+ 395, Radeon 8060S (gfx1151), 128 GB LPDDR5X, Fedora 44, ROCm/HIP 7.1, Kernel 7.1.8,
+Samsung 990 PRO NVMe. Alle Läufe unter <code>bench/memguard.py</code>. Rohdaten unter <code>bench/results/</code>.</p>
+
+<h2 id="vorlauf">Vorlauf vom 29.08.2026 (vcruz305-Fork, ohne HIP-Top-k-Fix, ohne MTP)</h2>
+<div class="tablewrap"><table>
+<tr><th>Quant</th><th>Kontext</th><th class="num">Ladezeit</th><th class="num">Prefill</th><th class="num">Decode kurz</th><th class="num">Decode bei 42k Tiefe</th><th class="num">frei nach Laden</th></tr>
+<tr><td>UD-IQ2_XXS</td><td>131072, q8_0</td><td class="num">31 s</td><td class="num">71 t/s (290 Token)</td><td class="num">14,0 t/s</td><td class="num bad">7,3 t/s</td><td class="num">~12 GiB</td></tr>
+</table></div>
+<p>Der Einbruch mit der Tiefe ist das erwartete Bild eines CPU-Fallbacks im Top-k des Indexers (Discussion #27950); alle jetzt
+gebauten Engines enthalten den Radix-Top-k (#27466).</p>
+
+<h2 id="llamabench">Sweep 1: llama-bench (ohne MTP) – <span class="warn">ausstehend</span></h2>
+<p><code>bench/llama_bench.sh</code>: pp512/tg128 bei Tiefe 0, 8k und 32k für <code>tk-mtp</code>, <code>unsloth</code>, <code>tk</code>, <code>tk-merged</code>;
+ubatch 512/1024/2048; KV q8_0 (f16 als Kontrolle). Erwartung: Decode konstant über die Tiefe; Prefill mit ubatch steigend.</p>
+<div class="tablewrap"><table>
+<tr><th>Engine</th><th>Quant</th><th class="num">ubatch</th><th class="num">pp512 @0</th><th class="num">tg128 @0</th><th class="num">tg128 @8k</th><th class="num">tg128 @32k</th></tr>
+<tr><td colspan="7" class="empty">noch keine Messung</td></tr>
+</table></div>
+
+<h2 id="footprint">Sweep 0: Speicherbedarf und erste Anfrage – <span class="warn">ausstehend</span></h2>
+<p><code>bench/mem_probe.py</code> je Preset: Ladezeit, Puffergrößen aus dem Log, MemAvailable-Delta, pp/tg, Draft-Akzeptanz. Kalibriert das
+Speichermodell in <code>glm53/memory.py</code>.</p>
+<div class="tablewrap"><table>
+<tr><th>Engine</th><th>Quant</th><th>MTP</th><th>Kontext</th><th class="num">Ladezeit</th><th class="num">Decode</th><th class="num">Akzeptanz</th><th class="num">Bedarf (Δ MemAvailable)</th><th class="num">geschätzt</th></tr>
+<tr><td>tk-mtp</td><td>UD-IQ2_XXS</td><td>n2</td><td>131k</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">100,0 GiB</td></tr>
+<tr><td>unsloth</td><td>UD-IQ2_XXS</td><td>n2</td><td>131k</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">100,0 GiB</td></tr>
+<tr><td>tk</td><td>UD-IQ2_XXS</td><td>–</td><td>131k</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">96,6 GiB</td></tr>
+</table></div>
+
+<h2 id="mtp">Sweep 2: MTP-Feintuning – <span class="warn">ausstehend</span></h2>
+<p><code>bench/mtp_sweep.py</code>: ohne MTP, n1–n4 bei p_min 0,75, n3 bei p_min 0, n3 + ngram-mod, n2 bei Temperatur 0,6 und 0; drei Prompt-Typen
+(Code, Prosa, Reasoning), reasoning_effort high, 32k Kontext. Community-Vergleichswerte: Akzeptanz 0,74 (mittlere Draft-Länge 4,1) bei
+CPU-Offload (+15–30 %); auf 4×Ampere ohne Offload 25,0 → 19,0 t/s (n1) bzw. 16,4 (n3) – dort lohnt MTP nicht. Im Qwen-Projekt auf
+dieser Maschine: 21 → 35 t/s.</p>
+<div class="tablewrap"><table>
+<tr><th>Konfiguration</th><th class="num">Ø</th><th class="num">Code</th><th class="num">Prosa</th><th class="num">Reasoning</th><th class="num">Akzeptanz</th></tr>
+<tr><td colspan="6" class="empty">noch keine Messung</td></tr>
+</table></div>
+
+<h2 id="multiuser">Sweep 3: Mehrnutzer – <span class="warn">ausstehend</span></h2>
+<p><code>bench/multiuser.py</code>: 1/2/4/8 gleichzeitige Anfragen mit 8k Prompt und 512 Token Ausgabe, <code>--kv-unified</code>, Codewort-Prüfung.
+Einmal ohne MTP (tk), einmal mit (tk-mtp).</p>
+<div class="tablewrap"><table>
+<tr><th class="num">Nutzer</th><th class="num">Σ t/s ohne MTP</th><th class="num">je Nutzer</th><th class="num">TTFT</th><th class="num">Σ t/s mit MTP</th><th class="num">Mix-ups</th></tr>
+<tr><td colspan="6" class="empty">noch keine Messung</td></tr>
+</table></div>
+
+<h2 id="vision">Vision – <span class="warn">ausstehend</span></h2>
+<p>Preset <code>chat-vision</code> (tk-mtp + AesSedai-mmproj Q8_0): Bildtokenzahl, Ladezeit, Speicher. Community: 1500×500-Logo → 1003 Token,
+2875×1500-Diagramm → 5586 Token (#27773, Projektor auf CPU).</p>
+
+</div></main>
+<footer><div class="wrap">Stand: 5. September 2026 · Vorbereitung auf einem Ryzen AI MAX+ 395 (Radeon 8060S, 128 GB) unter Fedora 44, ROCm/HIP 7.1 · Messungen ausstehend · Projekt: <a href="https://github.com/kksoftwareag/strix-halo-glm-5.3-flash">kksoftwareag/strix-halo-glm-5.3-flash</a> · Diese Seiten liegen im Ordner <code>docs/</code> des Projekts</div></footer>
+</body>
+</html>

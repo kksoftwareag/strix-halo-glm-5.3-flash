@@ -1,0 +1,1025 @@
+diff --git a/common/speculative.cpp b/common/speculative.cpp
+index 851a47b9a..92f9cafac 100644
+--- a/common/speculative.cpp
++++ b/common/speculative.cpp
+@@ -1357,6 +1357,11 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
+     std::vector<int>                i_last;
+     std::vector<std::vector<float>> chain_h;
+ 
++    bool dsa_index_share = false;
++    size_t dsa_sel_width = 0;
++    std::vector<std::vector<int32_t>> dsa_sel;
++    std::vector<int32_t> dsa_sel_batch;
++
+     common_speculative_impl_draft_mtp(const common_params_speculative & params, uint32_t n_seq)
+         : common_speculative_impl(COMMON_SPECULATIVE_TYPE_DRAFT_MTP, n_seq, params.draft.n_max)
+         , params(params.draft)
+@@ -1370,6 +1375,11 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
+                 "MTP input row width must match the target h_nextn width");
+         n_mtp_layers = std::max(1, (int) llama_model_n_layer_nextn(llama_get_model(ctx_dft)));
+ 
++        dsa_index_share = llama_set_mtp_dsa_index_share(ctx_dft, true);
++        if (dsa_index_share) {
++            dsa_sel.resize(n_seq);
++        }
++
+         SPC_TRC("%s", "adding speculative implementation 'draft-mtp'\n");
+         SPC_TRC("- n_max=%d, n_min=%d, p_min=%.2f, n_embd=%d, backend_sampling=%d\n", this->params.n_max, this->params.n_min, this->params.p_min, n_embd, (int) this->params.backend_sampling);
+         SPC_TRC("- gpu_layers=%d, cache_k=%s, cache_v=%s, ctx_tgt=%s, ctx_dft=%s, devices=[%s]\n",
+@@ -1435,6 +1445,8 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
+ 
+         verify_h.assign(n_seq, {});
+         verify_h_rows.assign(n_seq, 0);
++
++        SPC_TRC("- dsa_index_share=%d\n", (int) dsa_index_share);
+     }
+ 
+     ~common_speculative_impl_draft_mtp() override {
+@@ -1450,6 +1462,10 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
+         }
+         backend_chains.clear();
+ 
++        if (dsa_index_share && ctx_dft != nullptr) {
++            llama_set_mtp_dsa_index_share(ctx_dft, false);
++        }
++
+         if (batch.token != nullptr) {
+             free(batch.token);
+             batch.token = nullptr;
+@@ -1457,6 +1473,63 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
+         llama_batch_free(batch);
+     }
+ 
++    void reset_dsa_index_share() {
++        if (!dsa_index_share) {
++            return;
++        }
++        llama_set_mtp_dsa_selection(params.ctx_dft, nullptr, 0);
++        dsa_sel_width = 0;
++        dsa_sel_batch.clear();
++        for (auto & row : dsa_sel) {
++            row.clear();
++        }
++    }
++
++    bool capture_dsa_index_share(const llama_batch & current) {
++        size_t n = 0;
++        const int32_t * sel = llama_get_mtp_dsa_selection(params.ctx_dft, &n);
++        if (sel == nullptr || current.n_tokens <= 0 || n == 0 || n % (size_t) current.n_tokens != 0) {
++            return false;
++        }
++
++        const size_t width = n / (size_t) current.n_tokens;
++        for (auto & row : dsa_sel) {
++            row.clear();
++        }
++        for (int32_t k = 0; k < current.n_tokens; ++k) {
++            if (current.n_seq_id[k] != 1) {
++                return false;
++            }
++            const llama_seq_id seq_id = current.seq_id[k][0];
++            if (seq_id < 0 || seq_id >= (llama_seq_id) n_seq || !dsa_sel[seq_id].empty()) {
++                return false;
++            }
++            dsa_sel[seq_id].assign(sel + (size_t) k*width, sel + (size_t) (k + 1)*width);
++        }
++        dsa_sel_width = width;
++        return true;
++    }
++
++    bool stage_dsa_index_share(const llama_batch & current) {
++        if (dsa_sel_width == 0 || current.n_tokens <= 0) {
++            return false;
++        }
++
++        dsa_sel_batch.resize(dsa_sel_width*(size_t) current.n_tokens);
++        for (int32_t k = 0; k < current.n_tokens; ++k) {
++            if (current.n_seq_id[k] != 1) {
++                return false;
++            }
++            const llama_seq_id seq_id = current.seq_id[k][0];
++            if (seq_id < 0 || seq_id >= (llama_seq_id) n_seq || dsa_sel[seq_id].size() != dsa_sel_width) {
++                return false;
++            }
++            std::copy(dsa_sel[seq_id].begin(), dsa_sel[seq_id].end(), dsa_sel_batch.begin() + (size_t) k*dsa_sel_width);
++        }
++
++        return llama_set_mtp_dsa_selection(params.ctx_dft, dsa_sel_batch.data(), dsa_sel_batch.size());
++    }
++
+     void begin(llama_seq_id seq_id, const llama_tokens & prompt) override {
+         const int32_t N = (int32_t) prompt.size();
+         if (N <= 0) {
+@@ -1507,6 +1580,8 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
+         auto * ctx_tgt = this->params.ctx_tgt;
+         auto * ctx_dft = this->params.ctx_dft;
+ 
++        reset_dsa_index_share();
++
+         const size_t row_bytes = (size_t) n_embd * sizeof(float);
+ 
+         // if kv is shared with target (e.g Gemma4), then we can skip this catch-up decode
+@@ -1596,6 +1671,8 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
+     void draft(common_speculative_draft_params_vec & dparams) override {
+         auto & ctx_dft = params.ctx_dft;
+ 
++        reset_dsa_index_share();
++
+         common_batch_clear(batch);
+ 
+         // keep track of which sequences are still drafting
+@@ -1628,6 +1705,10 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
+         int i = 0;
+ 
+         while (n_drafting > 0) {
++            if (dsa_index_share && i > 0 && dsa_sel_width > 0 && !stage_dsa_index_share(batch)) {
++                reset_dsa_index_share();
++            }
++
+             // each step decodes under a different head, i.e. a different decoder layer, and
+             // KV is per layer. process() filled this layer's KV only for positions < n_past
+             // (prompt + accepted prefix) — nothing in the draft region yet. so reset the
+@@ -1650,6 +1731,10 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
+                 break;
+             }
+ 
++            if (dsa_index_share && i == 0 && !capture_dsa_index_share(batch)) {
++                reset_dsa_index_share();
++            }
++
+             // rebuild the batch for the next step: the growing-KV paths re-add only the
+             // new token (the KV already holds the prefix), while chained heads re-add the
+             // whole prefix at the next head. dropped sequences are simply not re-added.
+@@ -1728,6 +1813,8 @@ struct common_speculative_impl_draft_mtp : public common_speculative_impl {
+             ++i;
+         }
+ 
++        reset_dsa_index_share();
++
+         if (chain_heads) {
+             llama_set_nextn_layer_offset(ctx_dft, 0); // restore default for non-draft decodes
+         }
+diff --git a/src/llama-arch.cpp b/src/llama-arch.cpp
+index ef070642e..c9f8c4aae 100644
+--- a/src/llama-arch.cpp
++++ b/src/llama-arch.cpp
+@@ -1120,6 +1120,7 @@ bool llm_arch_supports_rs_rollback(const llm_arch & arch) {
+         case LLM_ARCH_LFM2:
+         case LLM_ARCH_LFM2MOE:
+         case LLM_ARCH_BAILINGMOE3:
++        case LLM_ARCH_GLM5_NEXT:
+             return true;
+         default:
+             return false;
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 70039156f..fdc607788 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -7,6 +7,7 @@
+ #include "llama-batch.h"
+ #include "llama-io.h"
+ #include "llama-memory.h"
++#include "llama-memory-hybrid-idx.h"
+ #include "llama-mmap.h"
+ #include "llama-model.h"
+ #include "llama-ext.h"
+@@ -980,6 +981,74 @@ float * llama_context::get_embeddings_nextn_ith(int32_t i) {
+     }
+ }
+ 
++bool llama_context::set_mtp_dsa_index_share(bool enabled) {
++    if (model.arch != LLM_ARCH_GLM5_NEXT || cparams.ctx_type != LLAMA_CONTEXT_TYPE_MTP || memory == nullptr) {
++        return false;
++    }
++
++    enabled = enabled && model.hparams.indexer_index_share_mtp;
++
++    auto * mem = static_cast<llama_memory_hybrid_idx *>(memory.get());
++    if (mem->get_mtp_dsa_index_share() != enabled) {
++        mem->set_mtp_dsa_index_share(enabled);
++        sched_need_reserve = true;
++    }
++
++    return enabled;
++}
++
++bool llama_context::set_mtp_dsa_selection(const int32_t * data, size_t size) {
++    if (model.arch != LLM_ARCH_GLM5_NEXT || cparams.ctx_type != LLAMA_CONTEXT_TYPE_MTP || memory == nullptr) {
++        return false;
++    }
++
++    auto * mem = static_cast<llama_memory_hybrid_idx *>(memory.get());
++    if (!mem->get_mtp_dsa_index_share()) {
++        return false;
++    }
++
++    mem->set_mtp_dsa_selection(data, size);
++    return true;
++}
++
++const int32_t * llama_context::get_mtp_dsa_selection(size_t * size) {
++    if (size != nullptr) {
++        *size = 0;
++    }
++    if (mtp_dsa_sel_raw.empty() || mtp_dsa_sel_raw.size() != mtp_dsa_sel_mask.size() || mtp_dsa_sel_width == 0) {
++        return nullptr;
++    }
++    GGML_ASSERT(memory != nullptr && model.arch == LLM_ARCH_GLM5_NEXT);
++    GGML_ASSERT(mtp_dsa_sel_raw.size() == mtp_dsa_sel_width*mtp_dsa_sel_seq.size());
++
++    auto * mem = static_cast<llama_memory_hybrid_idx *>(memory.get());
++    auto * mem_idx = mem->get_mem_idx();
++    GGML_ASSERT(mem_idx != nullptr);
++
++    mtp_dsa_sel.resize(mtp_dsa_sel_raw.size());
++    for (size_t row = 0; row < mtp_dsa_sel_seq.size(); ++row) {
++        const llama_seq_id seq_id = mtp_dsa_sel_seq[row];
++        GGML_ASSERT(seq_id >= 0);
++        const auto & cells = mem_idx->get_cells(seq_id);
++
++        for (size_t j = 0; j < mtp_dsa_sel_width; ++j) {
++            const size_t i = row*mtp_dsa_sel_width + j;
++            const int32_t cell = mtp_dsa_sel_raw[i];
++            if (mtp_dsa_sel_mask[i] != 0.0f) {
++                mtp_dsa_sel[i] = -1;
++                continue;
++            }
++            GGML_ASSERT(cell >= 0 && (uint32_t) cell < cells.size());
++            GGML_ASSERT(!cells.is_empty((uint32_t) cell) && cells.seq_has((uint32_t) cell, seq_id));
++            mtp_dsa_sel[i] = cells.pos_get((uint32_t) cell);
++        }
++    }
++    if (size != nullptr) {
++        *size = mtp_dsa_sel.size();
++    }
++    return mtp_dsa_sel.data();
++}
++
+ float * llama_context::get_embeddings_layer_inp(uint32_t lid) {
+     output_reorder();
+ 
+@@ -1737,6 +1806,15 @@ int llama_context::decode(const llama_batch & batch_inp) {
+ 
+     output_swaps.clear();
+ 
++    if (!mtp_dsa_sel_raw.empty()) {
++        synchronize();
++    }
++    mtp_dsa_sel_raw.clear();
++    mtp_dsa_sel_mask.clear();
++    mtp_dsa_sel_seq.clear();
++    mtp_dsa_sel.clear();
++    mtp_dsa_sel_width = 0;
++
+     sched_reserve();
+ 
+     bool did_optimize = false;
+@@ -1966,6 +2044,36 @@ int llama_context::decode(const llama_batch & batch_inp) {
+             }
+         }
+ 
++        auto * t_mtp_sel  = res->get_mtp_dsa_sel();
++        auto * t_mtp_mask = res->get_mtp_dsa_mask();
++        if (t_mtp_sel != nullptr || t_mtp_mask != nullptr) {
++            GGML_ASSERT(t_mtp_sel != nullptr && t_mtp_mask != nullptr);
++            GGML_ASSERT(t_mtp_sel->type == GGML_TYPE_I32 && t_mtp_mask->type == GGML_TYPE_F32);
++            GGML_ASSERT(ggml_is_contiguous(t_mtp_sel) && ggml_is_contiguous(t_mtp_mask));
++            GGML_ASSERT(t_mtp_sel->ne[0] == t_mtp_mask->ne[0] && t_mtp_sel->ne[1] == (int64_t) ubatch.n_tokens);
++            GGML_ASSERT(ggml_nelements(t_mtp_sel) == ggml_nelements(t_mtp_mask));
++
++            const size_t width = (size_t) t_mtp_sel->ne[0];
++            if (mtp_dsa_sel_width == 0) {
++                mtp_dsa_sel_width = width;
++                mtp_dsa_sel_raw.resize(width*n_tokens_all);
++                mtp_dsa_sel_mask.resize(width*n_tokens_all);
++                mtp_dsa_sel_seq.resize(n_tokens_all, -1);
++            }
++            GGML_ASSERT(width == mtp_dsa_sel_width);
++            for (uint32_t i = 0; i < ubatch.n_tokens; ++i) {
++                GGML_ASSERT(ubatch.n_seq_id[i] == 1);
++                mtp_dsa_sel_seq[(size_t) n_tokens_prev + i] = ubatch.seq_id[i][0];
++            }
++
++            const size_t offset = width*(size_t) n_tokens_prev;
++            ggml_backend_t backend_sel = ggml_backend_sched_get_tensor_backend(sched.get(), t_mtp_sel);
++            ggml_backend_t backend_mask = ggml_backend_sched_get_tensor_backend(sched.get(), t_mtp_mask);
++            GGML_ASSERT(backend_sel != nullptr && backend_mask != nullptr);
++            ggml_backend_tensor_get_async(backend_sel, t_mtp_sel, mtp_dsa_sel_raw.data() + offset, 0, ggml_nbytes(t_mtp_sel));
++            ggml_backend_tensor_get_async(backend_mask, t_mtp_mask, mtp_dsa_sel_mask.data() + offset, 0, ggml_nbytes(t_mtp_mask));
++        }
++
+         if (has_samplers) {
+             const auto stride = n_vocab;
+ 
+@@ -3917,6 +4025,25 @@ float * llama_get_embeddings_nextn_ith(llama_context * ctx, int32_t i) {
+     return ctx->get_embeddings_nextn_ith(i);
+ }
+ 
++bool llama_set_mtp_dsa_index_share(llama_context * ctx, bool enabled) {
++    return ctx != nullptr && ctx->set_mtp_dsa_index_share(enabled);
++}
++
++bool llama_set_mtp_dsa_selection(llama_context * ctx, const int32_t * data, size_t size) {
++    return ctx != nullptr && ctx->set_mtp_dsa_selection(data, size);
++}
++
++const int32_t * llama_get_mtp_dsa_selection(llama_context * ctx, size_t * size) {
++    if (ctx == nullptr) {
++        if (size != nullptr) {
++            *size = 0;
++        }
++        return nullptr;
++    }
++    ctx->synchronize();
++    return ctx->get_mtp_dsa_selection(size);
++}
++
+ float * llama_get_embeddings_layer_inp(llama_context * ctx, uint32_t lid) {
+     ctx->synchronize();
+ 
+diff --git a/src/llama-context.h b/src/llama-context.h
+index bf91daa8b..8073d96fb 100644
+--- a/src/llama-context.h
++++ b/src/llama-context.h
+@@ -100,6 +100,9 @@ struct llama_context {
+     size_t  get_sampled_probs_count(int32_t idx);
+ 
+     const llama_token * get_sampled_candidates_ith(int32_t idx);
++    bool set_mtp_dsa_index_share(bool enabled);
++    bool set_mtp_dsa_selection(const int32_t * data, size_t size);
++    const int32_t * get_mtp_dsa_selection(size_t * size);
+     size_t get_sampled_candidates_count(int32_t idx);
+ 
+     void attach_threadpool(
+@@ -300,6 +303,12 @@ private:
+     // sets llm_graph_result::t_h_nextn
+     buffer_view<float> embd_nextn = {nullptr, 0};
+ 
++    std::vector<int32_t> mtp_dsa_sel_raw;
++    std::vector<float> mtp_dsa_sel_mask;
++    std::vector<llama_seq_id> mtp_dsa_sel_seq;
++    std::vector<int32_t> mtp_dsa_sel;
++    size_t mtp_dsa_sel_width = 0;
++
+     // host buffers for output layer input embeddings, per layer
+     // populated when cparams.output_layer_inp[il] is true
+     std::vector<buffer_view<float>> embd_layer_inp;
+diff --git a/src/llama-ext.h b/src/llama-ext.h
+index 92a759b7a..71f7b72d4 100644
+--- a/src/llama-ext.h
++++ b/src/llama-ext.h
+@@ -107,6 +107,10 @@ LLAMA_API float * llama_get_embeddings_nextn(struct llama_context * ctx);
+ // LLAMA_API float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i);
+ LLAMA_API float * llama_get_embeddings_nextn_ith(struct llama_context * ctx, int32_t i);
+ 
++LLAMA_API bool llama_set_mtp_dsa_index_share(struct llama_context * ctx, bool enabled);
++LLAMA_API bool llama_set_mtp_dsa_selection(struct llama_context * ctx, const int32_t * data, size_t size);
++LLAMA_API const int32_t * llama_get_mtp_dsa_selection(struct llama_context * ctx, size_t * size);
++
+ // Set whether the context outputs the input embeddings of a specific layer
+ LLAMA_API void llama_set_embeddings_layer_inp(struct llama_context * ctx, uint32_t lid, bool value);
+ 
+diff --git a/src/llama-graph.cpp b/src/llama-graph.cpp
+index 147cd2cc0..308e36da8 100644
+--- a/src/llama-graph.cpp
++++ b/src/llama-graph.cpp
+@@ -1326,6 +1326,8 @@ void llm_graph_result::reset() {
+     t_embd        = nullptr;
+     t_embd_pooled = nullptr;
+     t_h_nextn     = nullptr;
++    t_mtp_dsa_sel  = nullptr;
++    t_mtp_dsa_mask = nullptr;
+ 
+     t_layer_inp.resize(LLAMA_MAX_LAYERS + 1);
+     std::fill(t_layer_inp.begin(), t_layer_inp.end(), nullptr);
+@@ -1372,6 +1374,12 @@ void llm_graph_result::set_outputs(const llm_graph_params & params) {
+     if (t_h_nextn != nullptr) {
+         ggml_set_output(t_h_nextn);
+     }
++    if (t_mtp_dsa_sel != nullptr) {
++        ggml_set_output(t_mtp_dsa_sel);
++    }
++    if (t_mtp_dsa_mask != nullptr) {
++        ggml_set_output(t_mtp_dsa_mask);
++    }
+     {
+         const auto & embeddings_layer_inp = params.cparams.embeddings_layer_inp;
+         for (size_t il = 0; il < embeddings_layer_inp.size(); ++il) {
+diff --git a/src/llama-graph.h b/src/llama-graph.h
+index dddfdac7b..4c962c006 100644
+--- a/src/llama-graph.h
++++ b/src/llama-graph.h
+@@ -900,6 +900,8 @@ public:
+     ggml_tensor * get_embd()        const { return t_embd; }
+     ggml_tensor * get_embd_pooled() const { return t_embd_pooled; }
+     ggml_tensor * get_h_nextn()     const { return t_h_nextn; }
++    ggml_tensor * get_mtp_dsa_sel() const { return t_mtp_dsa_sel; }
++    ggml_tensor * get_mtp_dsa_mask() const { return t_mtp_dsa_mask; }
+ 
+     ggml_tensor * get_layer_inp(int il) const { return t_layer_inp[il]; }
+ 
+@@ -935,6 +937,8 @@ public:
+     ggml_tensor * t_embd        = nullptr;
+     ggml_tensor * t_embd_pooled = nullptr;
+     ggml_tensor * t_h_nextn     = nullptr; // [n_embd, n_outputs] hidden state before final output norm
++    ggml_tensor * t_mtp_dsa_sel  = nullptr;
++    ggml_tensor * t_mtp_dsa_mask = nullptr;
+ 
+     std::vector<ggml_tensor *> t_layer_inp;
+ 
+diff --git a/src/llama-memory-hybrid-idx.cpp b/src/llama-memory-hybrid-idx.cpp
+index 8c9bbf181..16cda7c40 100644
+--- a/src/llama-memory-hybrid-idx.cpp
++++ b/src/llama-memory-hybrid-idx.cpp
+@@ -141,9 +141,27 @@ llama_memory_context_ptr llama_memory_hybrid_idx::init_update(llama_context * lc
+     return std::make_unique<llama_memory_hybrid_idx_context>(this, lctx, optimize);
+ }
+ 
++void llama_memory_hybrid_idx::set_mtp_dsa_index_share(bool enabled) {
++    mtp_dsa_index_share = enabled;
++    if (!enabled) {
++        mtp_dsa_selection.clear();
++    }
++}
++
++void llama_memory_hybrid_idx::set_mtp_dsa_selection(const int32_t * data, size_t size) {
++    if (data == nullptr) {
++        GGML_ASSERT(size == 0);
++        mtp_dsa_selection.clear();
++        return;
++    }
++    mtp_dsa_selection.assign(data, data + size);
++}
++
+ void llama_memory_hybrid_idx::clear(bool data) {
+     llama_memory_hybrid::clear(data);
+ 
++    mtp_dsa_selection.clear();
++
+     if (mem_idx) {
+         mem_idx->clear(data);
+     }
+@@ -158,6 +176,7 @@ bool llama_memory_hybrid_idx::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_po
+     if (mem_idx) {
+         mem_idx->seq_rm(seq_id, p0, p1);
+         mem_idx_stale = true;
++        mtp_dsa_selection.clear();
+     }
+ 
+     return get_mem_attn()->seq_rm(seq_id, p0, p1);
+@@ -169,6 +188,7 @@ void llama_memory_hybrid_idx::seq_cp(llama_seq_id seq_id_src, llama_seq_id seq_i
+     if (mem_idx) {
+         mem_idx->seq_cp(seq_id_src, seq_id_dst, p0, p1);
+         mem_idx_stale = true;
++        mtp_dsa_selection.clear();
+     }
+ }
+ 
+@@ -178,6 +198,7 @@ void llama_memory_hybrid_idx::seq_keep(llama_seq_id seq_id) {
+     if (mem_idx) {
+         mem_idx->seq_keep(seq_id);
+         mem_idx_stale = true;
++        mtp_dsa_selection.clear();
+     }
+ }
+ 
+@@ -187,6 +208,7 @@ void llama_memory_hybrid_idx::seq_add(llama_seq_id seq_id, llama_pos p0, llama_p
+     if (mem_idx) {
+         mem_idx->seq_add(seq_id, p0, p1, shift);
+         mem_idx_stale = true;
++        mtp_dsa_selection.clear();
+     }
+ }
+ 
+@@ -196,6 +218,7 @@ void llama_memory_hybrid_idx::seq_div(llama_seq_id seq_id, llama_pos p0, llama_p
+     if (mem_idx) {
+         mem_idx->seq_div(seq_id, p0, p1, d);
+         mem_idx_stale = true;
++        mtp_dsa_selection.clear();
+     }
+ }
+ 
+@@ -917,6 +940,14 @@ bool llama_memory_hybrid_idx_context::get_kpool_cache_safe() const {
+     return kpool_cur().cache_safe;
+ }
+ 
++bool llama_memory_hybrid_idx_context::get_mtp_dsa_index_share() const {
++    return mem != nullptr && mem->get_mtp_dsa_index_share();
++}
++
++size_t llama_memory_hybrid_idx_context::get_mtp_dsa_selection_size() const {
++    return mem != nullptr ? mem->get_mtp_dsa_selection().size() : 0;
++}
++
+ void llama_memory_hybrid_idx_context::set_input_kpool(ggml_tensor * pool_cells, ggml_tensor * pool_idxs, ggml_tensor * pool_mask, ggml_tensor * tail_idxs,
+         ggml_tensor * gather_mask, bool gather, ggml_tensor * new_pool_idxs, ggml_tensor * new_pool_rep,
+         const llama_ubatch * ubatch) const {
+@@ -1109,3 +1140,49 @@ void llama_memory_hybrid_idx_context::set_input_kpool(ggml_tensor * pool_cells,
+         }
+     }
+ }
++void llama_memory_hybrid_idx_context::set_input_mtp_dsa_selection(
++        ggml_tensor * sel, ggml_tensor * mask, bool gather,
++        const llama_ubatch * ubatch) const {
++    GGML_ASSERT(mem != nullptr && ctx_idx != nullptr);
++    GGML_ASSERT(sel != nullptr && mask != nullptr && ubatch != nullptr);
++    GGML_ASSERT(sel->type == GGML_TYPE_I32 && mask->type == GGML_TYPE_F32);
++
++    const auto & saved = mem->get_mtp_dsa_selection();
++    const size_t n = (size_t) ggml_nelements(sel);
++    const size_t width = (size_t) sel->ne[0];
++    GGML_ASSERT(saved.size() == n && (size_t) ggml_nelements(mask) == n);
++    GGML_ASSERT(sel->ne[1] == (int64_t) ubatch->n_tokens);
++
++    const auto & st = kpool_cur();
++    const int32_t n_kv = (int32_t) get_idx()->get_n_kv();
++    GGML_ASSERT(n_kv > 0);
++
++    std::vector<int32_t> mapped(n);
++    std::vector<float> valid(n);
++    for (uint32_t i = 0; i < ubatch->n_tokens; ++i) {
++        GGML_ASSERT(ubatch->n_seq_id[i] == 1);
++        const llama_seq_id seq_id = ubatch->seq_id[i][0];
++        GGML_ASSERT(seq_id >= 0 && seq_id < LLAMA_MAX_SEQ);
++        const auto & cells = st.seqs[seq_id].cells;
++
++        for (size_t j = 0; j < width; ++j) {
++            const size_t k = (size_t) i*width + j;
++            const llama_pos pos = saved[k];
++            auto it = pos >= 0 ? std::lower_bound(cells.begin(), cells.end(), std::make_pair(pos, 0u)) : cells.end();
++            const bool found = it != cells.end() && it->first == pos;
++
++            if (found) {
++                mapped[k] = (int32_t) it->second;
++                valid[k] = 0.0f;
++            } else {
++                mapped[k] = gather ? 0 : n_kv;
++                valid[k] = -INFINITY;
++            }
++        }
++    }
++
++    ggml_backend_tensor_set(sel, mapped.data(), 0, mapped.size()*sizeof(mapped[0]));
++    ggml_backend_tensor_set(mask, valid.data(), 0, valid.size()*sizeof(valid[0]));
++}
++
++
+diff --git a/src/llama-memory-hybrid-idx.h b/src/llama-memory-hybrid-idx.h
+index 27069d8bd..8fa28e330 100644
+--- a/src/llama-memory-hybrid-idx.h
++++ b/src/llama-memory-hybrid-idx.h
+@@ -95,6 +95,11 @@ public:
+     bool mem_idx_is_stale() const { return mem_idx_stale; }
+     void mem_idx_stale_clear   ()       { mem_idx_stale = false; }
+ 
++    void set_mtp_dsa_index_share(bool enabled);
++    bool get_mtp_dsa_index_share() const { return mtp_dsa_index_share; }
++    void set_mtp_dsa_selection(const int32_t * data, size_t size);
++    const std::vector<int32_t> & get_mtp_dsa_selection() const { return mtp_dsa_selection; }
++
+ private:
+     // forget seq_id (all of it if seq_id < 0) in every cache at once, so a failed restore cannot leave the caches out of step
+     // seq_id < 0 drops the whole context, as the caches themselves do on a failed restore
+@@ -107,6 +112,9 @@ private:
+     const std::unique_ptr<llama_kv_cache> mem_idx;
+ 
+     bool mem_idx_stale = false;
++
++    bool mtp_dsa_index_share = false;
++    std::vector<int32_t> mtp_dsa_selection;
+ };
+ 
+ class llama_memory_hybrid_idx_context : public llama_memory_hybrid_context {
+@@ -155,9 +163,14 @@ public:
+     uint32_t get_n_kpool    () const; // Padded pool count, where the last pool is always unused.
+     uint32_t get_n_kpool_new() const; // Exact count of pools completed by the current ubatch.
+     bool get_kpool_cache_safe() const;
++    bool get_mtp_dsa_index_share() const;
++    size_t get_mtp_dsa_selection_size() const;
+     void set_input_kpool(ggml_tensor * pool_cells, ggml_tensor * pool_idxs, ggml_tensor * pool_mask, ggml_tensor * tail_idxs,
+                          ggml_tensor * gather_mask, bool gather, ggml_tensor * new_pool_idxs, ggml_tensor * new_pool_rep,
+                          const llama_ubatch * ubatch) const;
++    void set_input_mtp_dsa_selection(ggml_tensor * sel, ggml_tensor * mask, bool gather,
++                                     const llama_ubatch * ubatch) const;
++
+     void set_input_qsa(ggml_tensor * cell_blk, ggml_tensor * blk_cells, ggml_tensor * blk_pos,
+                        ggml_tensor * bias, const llama_ubatch * ubatch, uint32_t ratio,
+                        bool blk_bias) const;
+diff --git a/src/llama-memory-recurrent.cpp b/src/llama-memory-recurrent.cpp
+index 57919accf..e5885ae72 100644
+--- a/src/llama-memory-recurrent.cpp
++++ b/src/llama-memory-recurrent.cpp
+@@ -80,6 +80,8 @@ llama_memory_recurrent::llama_memory_recurrent(
+             continue;
+         }
+ 
++        has_state = true;
++
+         const char * dev_name = "CPU";
+ 
+         ggml_backend_buffer_type_t buft = ggml_backend_cpu_buffer_type();
+@@ -190,16 +192,25 @@ bool llama_memory_recurrent::seq_rm(llama_seq_id seq_id, llama_pos p0, llama_pos
+         if (tail_id >= 0) {
+             auto & cell = cells[tail_id];
+ 
+-            // partial rollback via per-token snapshot index (bounded by n_rs_seq)
++            // Partial removal at the end of the sequence.
+             if (0 < p0 && p0 <= cell.pos && p1 > cell.pos) {
++                // An empty recurrent cache tracks positions only, so this is trivially valid.
++                if (!has_state) {
++                    cell.pos = p0 - 1;
++                    return true;
++                }
++
++                // Partial rollback via the per token snapshot planes, bounded by n_rs_seq.
+                 const llama_pos rollback = cell.pos - (p0 - 1);
+-                // pending rollback is single-use
++                // A pending rollback is single use.
+                 const bool pending = rs_idx[seq_id] != 0;
+                 if (!pending && rollback >= 1 && rollback <= (llama_pos) n_rs_seq) {
+                     set_rs_idx(seq_id, (uint32_t) rollback);
+                     cell.pos = p0 - 1;
+                     return true;
+                 }
++                LLAMA_LOG_DEBUG("%s: refused partial removal: seq=%d p0=%d tail.pos=%d rollback=%d n_rs_seq=%u pending=%d\n",
++                        __func__, seq_id, p0, cell.pos, rollback, n_rs_seq, (int) pending);
+                 return false;
+             }
+             // invalidate tails which will be cleared
+diff --git a/src/llama-memory-recurrent.h b/src/llama-memory-recurrent.h
+index 4abb3f5cf..4f7b16c8d 100644
+--- a/src/llama-memory-recurrent.h
++++ b/src/llama-memory-recurrent.h
+@@ -70,6 +70,8 @@ public:
+     uint32_t size = 0; // total number of cells, shared across all sequences
+     uint32_t used = 0; // used cells (i.e. at least one seq_id)
+ 
++    bool has_state = false;
++
+     // number of recurrent-state snapshots per seq for rollback; tensors are widened to (1 + n_rs_seq) groups
+     uint32_t n_rs_seq = 0;
+ 
+diff --git a/src/models/glm5-next.cpp b/src/models/glm5-next.cpp
+index e37800328..1377d44ac 100644
+--- a/src/models/glm5-next.cpp
++++ b/src/models/glm5-next.cpp
+@@ -65,9 +65,14 @@ void llama_model_glm5_next::load_arch_tensors(llama_model_loader & ml) {
+     const int64_t hc         = hparams.dsv4_hc_mult;
+     const int64_t hc_mix_dim = (2 + hc)*hc;
+ 
+-    // the NextN block is loaded but only used by the MTP graph.
+-    // Separated trunk_only/mtp_only handling TODO with DECODER_MTP graph in the MTP follow up
+-    int mtp_flags = 0;
++    // The NextN block is loaded but only used by the MTP graph.
++    const std::string mtp_probe = "blk." + std::to_string(n_layer) + ".nextn.eh_proj.weight";
++    const bool trunk_only = (n_layer_nextn > 0) && (ml.get_weight(mtp_probe.c_str()) == nullptr);
++    int mtp_flags = trunk_only ? TENSOR_NOT_REQUIRED : 0;
++    mtp_ready = n_layer_nextn > 0 && !trunk_only && ml.load_mtp;
++    if (trunk_only) {
++        LLAMA_LOG_INFO("%s: trunk only GGUF, the MTP draft head is unavailable\n", __func__);
++    }
+     if (!ml.load_mtp) {
+         mtp_flags |= TENSOR_SKIP;
+     }
+@@ -188,7 +193,10 @@ void llama_model_glm5_next::load_arch_tensors(llama_model_loader & ml) {
+ 
+ std::unique_ptr<llm_graph_context> llama_model_glm5_next::build_arch_graph(const llm_graph_params & params) const {
+     if (params.gtype == LLM_GRAPH_TYPE_DECODER_MTP) {
+-        throw std::runtime_error("GLM5-Next NextN graph not implemented yet");
++        if (!mtp_ready) {
++            throw std::runtime_error("MTP graph requested but the NextN tensors are not loaded");
++        }
++        return std::make_unique<graph_mtp>(*this, params);
+     }
+     return std::make_unique<graph>(*this, params);
+ }
+@@ -198,7 +206,8 @@ static ggml_tensor * glm5_conv1d(ggml_cgraph * gf, ggml_context * ctx0,
+                                  ggml_tensor * conv_states_all, ggml_tensor * conv_state_all,
+                                  int64_t qkv, ggml_tensor * x, ggml_tensor * proj_w, ggml_tensor * conv_w,
+                                  int64_t d_conv, int64_t head_dim, int64_t n_head,
+-                                 int64_t n_seq_tokens, int64_t n_seqs, int64_t n_tokens, int64_t kv_head) {
++                                 int64_t n_seq_tokens, int64_t n_seqs, int64_t n_tokens, int64_t kv_head,
++                                 int64_t mem_size, int64_t n_rs_seq) {
+     const int64_t d_inner         = head_dim * n_head;
+     const int64_t conv_state_size = (d_conv - 1) * d_inner;
+     const int64_t n_embd_r_total  = 3 * conv_state_size;
+@@ -212,14 +221,22 @@ static ggml_tensor * glm5_conv1d(ggml_cgraph * gf, ggml_context * ctx0,
+     ggml_tensor * x_3d   = ggml_reshape_3d(ctx0, x_proj, d_inner, n_seq_tokens, n_seqs);
+     ggml_tensor * conv_x = ggml_concat(ctx0, conv_state_x, ggml_transpose(ctx0, x_3d), 0);
+ 
+-    ggml_tensor * last_conv_x = ggml_view_3d(ctx0, conv_x, d_conv - 1, d_inner, n_seqs,
+-        conv_x->nb[1], conv_x->nb[2], n_seq_tokens * conv_x->nb[0]);
+-    ggml_build_forward_expand(gf,
+-        ggml_cpy(ctx0, last_conv_x,
+-            ggml_view_3d(ctx0, conv_states_all, d_conv - 1, d_inner, n_seqs,
+-                (d_conv - 1)   * ggml_element_size(conv_states_all),
+-                n_embd_r_total * ggml_element_size(conv_states_all),
+-                (kv_head * n_embd_r_total + qkv * conv_state_size) * ggml_element_size(conv_states_all))));
++    // Snapshot plane s holds the conv window s tokens back.
++    const int64_t n_planes = n_rs_seq + 1;
++    for (int64_t t = 1; t <= n_planes; ++t) {
++        const int64_t s_idx  = std::max<int64_t>(0, n_seq_tokens - n_planes + t);
++        const int64_t s_slot = n_planes - t;
++
++        ggml_tensor * conv_window = ggml_view_3d(ctx0, conv_x, d_conv - 1, d_inner, n_seqs,
++            conv_x->nb[1], conv_x->nb[2], s_idx * conv_x->nb[0]);
++
++        ggml_tensor * conv_update = ggml_view_3d(ctx0, conv_states_all, d_conv - 1, d_inner, n_seqs,
++            (d_conv - 1)   * ggml_element_size(conv_states_all),
++            n_embd_r_total * ggml_element_size(conv_states_all),
++            ((s_slot * mem_size + kv_head) * n_embd_r_total + qkv * conv_state_size) * ggml_element_size(conv_states_all));
++
++        ggml_build_forward_expand(gf, ggml_cpy(ctx0, conv_window, conv_update));
++    }
+ 
+     ggml_tensor * conv_weight = ggml_reshape_2d(ctx0, conv_w, d_conv, d_inner);
+     ggml_tensor * Xcur = ggml_ssm_conv(ctx0, conv_x, conv_weight);
+@@ -239,6 +256,9 @@ public:
+     void set_input(const llama_ubatch * ubatch) override {
+         mctx->get_idx()->set_input_k_idxs(k_idxs, ubatch);
+         mctx->set_input_kpool(pool_cells, pool_idxs, pool_mask, tail_idxs, gather_mask, gather, new_pool_idxs, new_pool_rep, ubatch);
++        if (reuse_sel != nullptr) {
++            mctx->set_input_mtp_dsa_selection(reuse_sel, gather_mask, gather, ubatch);
++        }
+     }
+ 
+     bool can_reuse(const llm_graph_params & params) override {
+@@ -260,6 +280,11 @@ public:
+         // The new pool path is sized exactly
+         res &= n_new             == mctx->get_n_kpool_new();
+         res &= cache_safe        == mctx->get_kpool_cache_safe();
++        const bool share = params.cparams.ctx_type == LLAMA_CONTEXT_TYPE_MTP && mctx->get_mtp_dsa_index_share();
++        const size_t saved = mctx->get_mtp_dsa_selection_size();
++        const bool reuse = share && saved == (size_t) n_sel*params.ubatch.n_tokens;
++        res &= mtp_share == share;
++        res &= (reuse_sel != nullptr) == reuse;
+ 
+         return res;
+     }
+@@ -270,6 +295,7 @@ public:
+     ggml_tensor * pool_mask     = nullptr; // F32/F16 [n_pool, n_tokens]
+     ggml_tensor * tail_idxs     = nullptr; // I32     [kpool - 1, n_tokens]
+     ggml_tensor * gather_mask   = nullptr; // F32     [n_sel, 1, 1, n_tokens]
++    ggml_tensor * reuse_sel     = nullptr; // I32     [n_sel, n_tokens]
+     ggml_tensor * new_pool_idxs = nullptr; // I32     [kpool, n_new]   members of the pools completed this ubatch
+     ggml_tensor * new_pool_rep  = nullptr; // I64     [n_new]          cell to write each new pooled key into
+ 
+@@ -279,6 +305,7 @@ public:
+     uint32_t n_sel = 0;
+     bool cache_safe = true;
+     bool gather = false;
++    bool mtp_share = false;
+     uint32_t n_kv  = 0;
+ };
+ 
+@@ -320,15 +347,24 @@ llama_model_glm5_next::llm_graph_input_kpool * llama_model_glm5_next::graph::bui
+ 
+         const int64_t n_top_pool = std::min<int64_t>(n_pool, hparams.indexer_top_k / kpool);
+         const int64_t n_sel      = kpool*n_top_pool + (hparams.indexer_kpool_select_tail ? kpool - 1 : 0);
++        const bool mtp_share = cparams.ctx_type == LLAMA_CONTEXT_TYPE_MTP && mctx_hyb->get_mtp_dsa_index_share();
++
+         inp->n_sel = (uint32_t) n_sel;
+         inp->gather = (int64_t) n_tokens <= max_ub && (int64_t) n_kv > n_sel;
++        inp->mtp_share = mtp_share;
+ 
+-        if (inp->gather) {
++        if (inp->gather || mtp_share) {
+             inp->gather_mask = ggml_new_tensor_4d(ctx0, GGML_TYPE_F32, n_sel, 1, 1, n_tokens);
+             ggml_set_input(inp->gather_mask);
+             // Keep the mask allocated even when no op reads it, because set_input_kpool always fills it.
+             ggml_build_forward_expand(gf, inp->gather_mask);
+         }
++
++        const size_t saved = mctx_hyb->get_mtp_dsa_selection_size();
++        if (mtp_share && saved == (size_t) n_sel*n_tokens) {
++            inp->reuse_sel = ggml_new_tensor_2d(ctx0, GGML_TYPE_I32, n_sel, n_tokens);
++            ggml_set_input(inp->reuse_sel);
++        }
+     }
+ 
+     inp->n_new = n_new;
+@@ -489,13 +525,15 @@ ggml_tensor * llama_model_glm5_next::graph::build_kda_layer(
+ 
+     const auto * mctx_cur = inp_rs->mctx;
+     const auto   kv_head  = mctx_cur->get_head();
++    const auto   mem_size = mctx_cur->get_size();
++    const auto   n_rs_seq = (int64_t) cparams.n_rs_seq;
+ 
+     ggml_tensor * conv_states_all = mctx_cur->get_r_l(il);
+     ggml_tensor * conv_state_all  = build_rs(inp_rs, conv_states_all, hparams.n_embd_r(), n_seqs);
+ 
+-    ggml_tensor * Qcur = glm5_conv1d(gf, ctx0, conv_states_all, conv_state_all, 0, cur, layer.wq, layer.ssm_q_conv, d_conv, head_dim, n_head_kda, n_seq_tokens, n_seqs, n_tokens, kv_head);
+-    ggml_tensor * Kcur = glm5_conv1d(gf, ctx0, conv_states_all, conv_state_all, 1, cur, layer.wk, layer.ssm_k_conv, d_conv, head_dim, n_head_kda, n_seq_tokens, n_seqs, n_tokens, kv_head);
+-    ggml_tensor * Vcur = glm5_conv1d(gf, ctx0, conv_states_all, conv_state_all, 2, cur, layer.wv, layer.ssm_v_conv, d_conv, head_dim, n_head_kda, n_seq_tokens, n_seqs, n_tokens, kv_head);
++    ggml_tensor * Qcur = glm5_conv1d(gf, ctx0, conv_states_all, conv_state_all, 0, cur, layer.wq, layer.ssm_q_conv, d_conv, head_dim, n_head_kda, n_seq_tokens, n_seqs, n_tokens, kv_head, mem_size, n_rs_seq);
++    ggml_tensor * Kcur = glm5_conv1d(gf, ctx0, conv_states_all, conv_state_all, 1, cur, layer.wk, layer.ssm_k_conv, d_conv, head_dim, n_head_kda, n_seq_tokens, n_seqs, n_tokens, kv_head, mem_size, n_rs_seq);
++    ggml_tensor * Vcur = glm5_conv1d(gf, ctx0, conv_states_all, conv_state_all, 2, cur, layer.wv, layer.ssm_v_conv, d_conv, head_dim, n_head_kda, n_seq_tokens, n_seqs, n_tokens, kv_head, mem_size, n_rs_seq);
+     cb(Qcur, "kda_q_conv", il);
+     cb(Kcur, "kda_k_conv", il);
+     cb(Vcur, "kda_v_conv", il);
+@@ -536,17 +574,10 @@ ggml_tensor * llama_model_glm5_next::graph::build_kda_layer(
+     Qcur = ggml_scale(ctx0, ggml_rms_norm(ctx0, Qcur, l2_eps / (float) head_dim), l2_scale);
+     Kcur = ggml_scale(ctx0, ggml_rms_norm(ctx0, Kcur, l2_eps / (float) head_dim), l2_scale);
+ 
+-    auto attn_out = build_delta_net(Qcur, Kcur, Vcur, g1, beta, state, il);
+-
+-    ggml_tensor * output    = ggml_cont(ctx0, attn_out.first);
+-    ggml_tensor * new_state = attn_out.second;
++    ggml_tensor * output = build_recurrent_attn(inp_rs, ssm_states_all, Qcur, Kcur, Vcur, g1, beta, state, il);
++    output = ggml_cont(ctx0, output);
+     cb(output, "kda_scan_out", il);
+ 
+-    ggml_build_forward_expand(gf,
+-        ggml_cpy(ctx0, new_state,
+-            ggml_view_1d(ctx0, ssm_states_all, hparams.n_embd_s() * n_seqs,
+-                         kv_head * hparams.n_embd_s() * ggml_element_size(ssm_states_all))));
+-
+     // output gate, then RMSNorm(o) * Sigmoid(g2)
+     ggml_tensor * g_a = ggml_mul_mat(ctx0, layer.ssm_g_a, cur);
+     ggml_tensor * g2  = ggml_mul_mat(ctx0, layer.ssm_g_b, g_a);
+@@ -579,9 +610,12 @@ ggml_tensor * llama_model_glm5_next::graph::build_kpool_select(
+     const int64_t n_pool         = inp_kpool->pool_cells->ne[0];
+     const int64_t n_new          = inp_kpool->n_new;
+ 
+-    ggml_tensor * iq = ggml_mul_mat(ctx0, layer.indexer_attn_q_b, qr);
+-    iq = ggml_reshape_3d(ctx0, iq, n_embd_indexer, n_indexer_head, n_tokens);
+-    cb(iq, "indexer_q", il);
++    ggml_tensor * iq = nullptr;
++    if (inp_kpool->reuse_sel == nullptr) {
++        iq = ggml_mul_mat(ctx0, layer.indexer_attn_q_b, qr);
++        iq = ggml_reshape_3d(ctx0, iq, n_embd_indexer, n_indexer_head, n_tokens);
++        cb(iq, "indexer_q", il);
++    }
+ 
+     // Per-token key and pool gate scores, cached together
+     ggml_tensor * ik = ggml_mul_mat(ctx0, layer.indexer_attn_k, cur);
+@@ -643,8 +677,8 @@ ggml_tensor * llama_model_glm5_next::graph::build_kpool_select(
+     pooled = ggml_reshape_3d(ctx0, pooled, n_embd_indexer, 1, n_pool);
+     cb(pooled, "indexer_pool_k", il);
+ 
+-    ggml_tensor * sel_idx = nullptr;
+-    {
++    ggml_tensor * sel_idx = inp_kpool->reuse_sel;
++    if (sel_idx == nullptr) {
+         ggml_tensor * weights = ggml_mul_mat(ctx0, layer.indexer_proj, cur);
+         weights = ggml_scale(ctx0, weights, 1.0f / sqrtf(float(n_embd_indexer * n_indexer_head)));
+         cb(weights, "indexer_weights", il);
+@@ -688,9 +722,16 @@ ggml_tensor * llama_model_glm5_next::graph::build_kpool_select(
+             // Append the incomplete tail with n_kv for missing cells.
+             sel_idx = ggml_concat(ctx0, sel_idx, inp_kpool->tail_idxs, 0);
+         }
++    } else {
++        cb(sel_idx, "indexer_sel_reuse", il);
+     }
+     const int64_t n_sel = sel_idx->ne[0];
+ 
++    if (inp_kpool->mtp_share && il >= (int) hparams.n_layer() && inp_kpool->reuse_sel == nullptr) {
++        res->t_mtp_dsa_sel  = sel_idx;
++        res->t_mtp_dsa_mask = inp_kpool->gather_mask;
++    }
++
+     // Gather returns selected cell indices and masks padding separately.
+     if (inp_kpool->gather) {
+         GGML_ASSERT(inp_kpool->gather_mask->ne[0] == n_sel && inp_kpool->gather_mask->ne[3] == n_tokens);
+@@ -818,3 +859,110 @@ ggml_tensor * llama_model_glm5_next::graph::build_dsa_layer(
+ 
+     return out;
+ }
++
++// Nextn draft head. The Nextn block is a DSA layer.
++
++llama_model_glm5_next::graph_mtp::graph_mtp(const llama_model & model, const llm_graph_params & params)
++    : graph(model, params, no_trunk_t{}) {
++    GGML_ASSERT(hparams.n_layer_nextn == 1 && "GLM5-Next MTP supports a single NextN block");
++
++    const int il = hparams.n_layer() + cparams.nextn_layer_offset;
++    GGML_ASSERT(cparams.nextn_layer_offset == 0);
++    const auto & layer = model.layers[il];
++
++    GGML_ASSERT(layer.nextn.eh_proj && layer.nextn.enorm && layer.nextn.hnorm && "MTP block tensors missing, convert without --no-mtp");
++
++    // token and previous hidden state inputs
++    auto inp = std::make_unique<llm_graph_input_embd_h>(hparams.n_embd);
++
++    inp->tokens = ggml_new_tensor_1d(ctx0, GGML_TYPE_I32, n_tokens);
++    ggml_set_input(inp->tokens);
++
++    inp->embd = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, hparams.n_embd_inp(), n_tokens);
++    ggml_set_input(inp->embd);
++
++    ggml_tensor * tok_embd;
++    if (ubatch.token) {
++        ggml_tensor * tok_embd_w = layer.nextn.embed_tokens ? layer.nextn.embed_tokens : model.tok_embd;
++        tok_embd = ggml_get_rows(ctx0, tok_embd_w, inp->tokens);
++    } else {
++        tok_embd = inp->embd;
++    }
++    cb(tok_embd, "mtp_tok_embd", il);
++
++    inp->h = ggml_new_tensor_2d(ctx0, GGML_TYPE_F32, hparams.n_embd, n_tokens);
++    ggml_set_input(inp->h);
++    ggml_set_name(inp->h, "mtp_h_input");
++    ggml_tensor * h_embd = inp->h;
++
++    res->add_input(std::move(inp));
++
++    ggml_tensor * inp_out_ids = build_inp_out_ids();
++
++    // K-only MLA cache plus the indexer cache, no recurrent layers here
++    const auto * mctx_hyb = static_cast<const llama_memory_hybrid_idx_context *>(mctx);
++
++    auto * inp_hyb   = build_inp_mem_hybrid_k();
++    auto * inp_attn  = inp_hyb->get_attn();
++    auto * inp_kpool = build_inp_kpool(mctx_hyb);
++
++    ggml_build_forward_expand(gf, inp_hyb->get_recr()->s_copy);
++
++    ggml_tensor * h_norm = build_norm(h_embd, layer.nextn.hnorm, nullptr, LLM_NORM_RMS, il);
++    ggml_tensor * e_norm = build_norm(tok_embd, layer.nextn.enorm, nullptr, LLM_NORM_RMS, il);
++    ggml_tensor * cur = ggml_mul_mat(ctx0, layer.nextn.eh_proj, ggml_concat(ctx0, e_norm, h_norm, 0));
++    cb(cur, "mtp_eh_proj", il);
++
++    ggml_tensor * inpSA = cur;
++
++    cur = build_norm(cur, layer.attn_norm, nullptr, LLM_NORM_RMS, il);
++    cb(cur, "mtp_attn_norm", il);
++
++    ggml_tensor * prev_sel = nullptr;
++    cur = build_dsa_layer(cur, layer, mctx_hyb, inp_attn, inp_kpool, &prev_sel, il);
++    cb(cur, "mtp_attn_out", il);
++
++    ggml_tensor * ffn_inp = ggml_add(ctx0, cur, inpSA);
++    cb(ffn_inp, "mtp_ffn_inp", il);
++
++    cur = build_norm(ffn_inp, layer.ffn_norm, nullptr, LLM_NORM_RMS, il);
++    cb(cur, "mtp_ffn_norm", il);
++
++    ggml_tensor * moe_out = build_moe_ffn(cur,
++            layer.ffn_gate_inp,
++            layer.ffn_up_exps,
++            layer.ffn_gate_exps,
++            layer.ffn_down_exps,
++            layer.ffn_exp_probs_b,
++            n_expert, n_expert_used,
++            LLM_FFN_SILU, hparams.expert_weights_norm,
++            hparams.expert_weights_scale,
++            (llama_expert_gating_func_type) hparams.expert_gating_func,
++            il);
++    cb(moe_out, "mtp_ffn_moe_out", il);
++
++    ggml_tensor * ffn_shexp = build_ffn(cur,
++            layer.ffn_up_shexp,   nullptr, nullptr,
++            layer.ffn_gate_shexp, nullptr, nullptr,
++            layer.ffn_down_shexp, nullptr, nullptr,
++            nullptr, LLM_FFN_SILU, LLM_FFN_PAR, il);
++    cb(ffn_shexp, "mtp_ffn_shexp", il);
++
++    cur = ggml_add(ctx0, ggml_add(ctx0, moe_out, ffn_shexp), ffn_inp);
++    cb(cur, "mtp_post_ffn", il);
++
++    // shared_head.norm, then the post-norm hidden state.
++    ggml_tensor * head_norm_w = layer.nextn.shared_head_norm ? layer.nextn.shared_head_norm : model.output_norm;
++    cur = build_norm(cur, head_norm_w, nullptr, LLM_NORM_RMS, -1);
++    cb(cur, "h_nextn", -1);
++    res->t_h_nextn = cur;
++
++    cur = ggml_get_rows(ctx0, cur, inp_out_ids);
++
++    ggml_tensor * head_w = layer.nextn.shared_head_head ? layer.nextn.shared_head_head : model.output;
++    cur = ggml_mul_mat(ctx0, head_w, cur);
++    cb(cur, "result_output", -1);
++
++    res->t_logits = cur;
++    ggml_build_forward_expand(gf, cur);
++}
+diff --git a/src/models/models.h b/src/models/models.h
+index a24d6d4a3..d41f968dc 100644
+--- a/src/models/models.h
++++ b/src/models/models.h
+@@ -2578,6 +2578,9 @@ struct llama_model_kimi_k3 : public llama_model_base {
+ 
+ struct llama_model_glm5_next : public llama_model_base {
+     llama_model_glm5_next(const struct llama_model_params & params) : llama_model_base(params) {}
++
++    // False for trunk only GGUFs and no_mtp loads.
++    bool mtp_ready = false;
+     void load_arch_hparams(llama_model_loader & ml) override;
+     void load_arch_tensors(llama_model_loader & ml) override;
+ 
+@@ -2604,6 +2607,16 @@ struct llama_model_glm5_next : public llama_model_base {
+                                       const llama_memory_hybrid_idx_context * mctx_hyb, llm_graph_input_attn_k * inp_attn,
+                                       llm_graph_input_kpool * inp_kpool, ggml_tensor ** prev_sel, int il);
+ 
++    protected:
++        // for graph_mtp
++        struct no_trunk_t {};
++        graph(const llama_model & model, const llm_graph_params & params, no_trunk_t) :
++            llama_model_deepseek4::graph_base<llm_build_delta_net_base>(params), model(model) {}
++    };
++
++    // Draft head, the Nextn block as a non hyper connected DSA layer
++    struct graph_mtp : public graph {
++        graph_mtp(const llama_model & model, const llm_graph_params & params);
+     };
+ 
+     std::unique_ptr<llm_graph_context> build_arch_graph(const llm_graph_params & params) const override;
